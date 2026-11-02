@@ -1,0 +1,10 @@
+# 依赖说明
+#
+# 本插件**不需要 ffmpeg**：语速/音量由内置的 numpy 实现完成。
+# numpy 由 AstrBot 自带，无需额外安装。
+#
+# aiohttp  —— 调用 Breeze 的 HTTP 接口（AstrBot 自带）
+# pydantic —— FunctionTool 用到了 pydantic.dataclasses（AstrBot 自带）
+#
+# 如果哪天想自己加解码 mp3 的能力，再考虑 soundfile（约 2~3 MB，pip 装不占插件包体积）
+aiohttp

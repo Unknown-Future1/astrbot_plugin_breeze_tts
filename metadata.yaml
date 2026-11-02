@@ -1,0 +1,6 @@
+name: astrbot_plugin_breeze_tts
+display_name: Breeze TTS 克隆语音
+desc: 使用本地部署的Breeze TTS模型克隆自定义音色并使用，无需任何 API Key。让你的大肥鱼能进行语音回复，支持语音触发概率、语速与音量等功能调节。
+version: "1.1.0"
+author: 未知の未来
+repo: https://github.com/Unknown-Future1/astrbot_plugin_breeze_tts

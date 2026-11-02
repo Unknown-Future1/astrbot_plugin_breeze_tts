@@ -1,0 +1,36 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 日志与临时文件 ----
+*.log
+*.tmp
+*.bak
+*.bak_*
+
+# ---- 音频/音色等本地测试产物（体积大，不该进仓库）----
+*.wav
+*.mp3
+*.breeze
+!docs/*.wav
+
+# ---- 打包产物 ----
+astrbot_plugin_breeze_tts-*.zip
