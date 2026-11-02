@@ -7,7 +7,7 @@ astrbot_plugin_breeze_tts —— 用本地 Breeze TTS 2 模型把文字回复转
   · 语音说过后按需用零宽空格抑制文字（voice_silence_mode）
   · LLM 工具 clone_tts
   · 自动语气指令（多调一次 LLM 分析情绪）
-  · numpy 实现语速（WSOLA）/ 音量后处理，不依赖外部程序
+  · numpy 实现语速（WSOLA）与音调（变调不变速），不依赖外部程序
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def _as_bool(value, default: bool) -> bool:
 @register(
     "astrbot_plugin_breeze_tts",
     "未知の未来",
-    "使用本地部署Breeze TTS克隆的自定义音色，无需任何 API Key。让你的大肥鱼能进行语音回复，支持语音触发概率、语速与音量等功能调节。插件头像dsh画的hhh",
+    "使用本地部署Breeze TTS克隆的自定义音色，无需任何 API Key。让你的大肥鱼能进行语音回复，支持语音触发概率、语速与音调等功能调节。插件头像dsh画的hhh",
     "1.0.0",
 )
 class BreezeTTSPlugin(Star):
@@ -94,7 +94,8 @@ class BreezeTTSPlugin(Star):
         self.blocked_words = [str(w) for w in (cfg.get("blocked_words") or []) if str(w).strip()]
 
         # ---- 服务与音色 ----
-        self.breeze_api = str(cfg.get("breeze_api") or "http://127.0.0.1:9000").strip()
+        # 两者都可以留空：留空时在 initialize() 里自动识别（探测端口 / 取第一个音色）
+        self.breeze_api = str(cfg.get("breeze_api") or "").strip()
         self.voice_id = str(cfg.get("voice_id") or "").strip()
         self.cfg_scale = _as_float(cfg.get("cfg_scale", 2.0), 2.0, 1.0, 4.0)
         self.seed = _as_int(cfg.get("seed", 42), 42, 0, 2**31 - 1)
@@ -108,10 +109,9 @@ class BreezeTTSPlugin(Star):
 
         # ---- 数值控制 ----
         self.speed_ratio = _as_int(cfg.get("speed_ratio", 0), 0, -50, 100)
-        self.loudness_rate = _as_int(cfg.get("loudness_rate", 0), 0, -100, 100)
+        self.pitch_shift = _as_int(cfg.get("pitch_shift", 0), 0, -12, 12)
 
         # ---- LLM 工具与文字抑制 ----
-        self.enable_llm_tool = _as_bool(cfg.get("enable_llm_tool", True), True)
         self.enable_tts_tool_minmax = _as_bool(cfg.get("enable_tts_tool_minmax", True), True)
         self.enable_llm_response = _as_bool(cfg.get("enable_llm_response", False), False)
 
@@ -125,30 +125,57 @@ class BreezeTTSPlugin(Star):
         )
 
         # ---- 启动自检（只记日志，不阻塞）----
-        if not self.voice_id:
-            logger.warning("[BreezeTTS] voice_id 为空，语音合成会失败（404 未知音色）")
-        if not audio_ops._HAS_NUMPY and (self.speed_ratio or self.loudness_rate):
-            logger.warning("[BreezeTTS] 环境缺少 numpy，语速/音量后处理将不生效")
+        if not audio_ops._HAS_NUMPY and (self.speed_ratio or self.pitch_shift):
+            logger.warning("[BreezeTTS] 环境缺少 numpy，语速/音调后处理将不生效")
 
-        if self.enable_llm_tool:
-            self.context.add_llm_tools(BreezeTTSTool(plugin=self))
+        # clone_tts 工具随着插件启用，不再单独开关
+        self.context.add_llm_tools(BreezeTTSTool(plugin=self))
 
     async def initialize(self):
-        ok = await self.client.health()
-        if ok:
-            logger.info(f"[BreezeTTS] 已启用，服务在线：{self.breeze_api}，音色：{self.voice_id}")
-            # 音色存在性自检（拼错时给明确提示，而不是等 404）
-            voices = await self.client.list_voices()
-            if voices and self.voice_id and self.voice_id not in voices:
+        """插件启用时：自动识别服务地址与音色，然后做一次连通性自检"""
+        # ---- ① 服务地址：没填就自动探测 ----
+        if not self.breeze_api:
+            found = await self.client.probe()
+            if found:
+                self.breeze_api = found
+            else:
                 logger.warning(
-                    f"[BreezeTTS] 音色 '{self.voice_id}' 不在服务端列表中，"
-                    f"现有音色：{', '.join(voices)}"
+                    "[BreezeTTS] 未配置 breeze_api，且本机常见端口（9000/9002/8000/8080）"
+                    "都没探测到服务；请先启动 start-breeze.cmd，"
+                    "或在插件配置里填上正确地址"
                 )
-        else:
+                return
+
+        ok = await self.client.health()
+        if not ok:
             logger.warning(
                 f"[BreezeTTS] 已启用，但连不上服务 {self.breeze_api}"
                 "（请先运行 start-breeze.cmd）；语音会静默跳过，文本回复不受影响"
             )
+            return
+
+        # ---- ② 音色：没填就用服务端第一个 ----
+        voices = await self.client.list_voices()
+        if not self.voice_id:
+            if voices:
+                self.voice_id = voices[0]
+                self.client.voice = voices[0]
+                logger.info(
+                    f"[BreezeTTS] 未配置 voice_id，自动使用第一个音色：{voices[0]}"
+                    f"（服务端共 {len(voices)} 个：{', '.join(voices)}）"
+                )
+            else:
+                logger.warning(
+                    "[BreezeTTS] 服务端还没有任何音色，语音合成会失败；"
+                    "请先按 README 的「克隆音色」步骤克隆一个"
+                )
+        elif voices and self.voice_id not in voices:
+            logger.warning(
+                f"[BreezeTTS] 音色 '{self.voice_id}' 不在服务端列表中，"
+                f"现有音色：{', '.join(voices)}"
+            )
+
+        logger.info(f"[BreezeTTS] 已启用，服务在线：{self.breeze_api}，音色：{self.voice_id or '（未识别）'}")
 
     async def terminate(self):
         logger.info("[BreezeTTS] 插件已停用/卸载")
@@ -204,6 +231,17 @@ class BreezeTTSPlugin(Star):
 
     async def synthesize(self, event: AstrMessageEvent, text: str) -> str | None:
         """生成语音，返回 base64 字符串；失败返回 None（调用方降级）"""
+        # 惰性兜底：插件启用时服务可能还没起来，那时没识别到音色；
+        # 这里再试一次，避免必须重载插件才能出声。
+        if not self.voice_id:
+            try:
+                detected = await self.client.detect_voice()
+                if detected:
+                    self.voice_id = detected
+                    logger.info(f"[BreezeTTS] 自动识别到音色：{detected}")
+            except Exception:  # noqa: BLE001
+                pass
+
         instruction = await self.resolve_instruction(event, text)
         # 没有指令时用 cfg=1 换速度；有指令时用配置值（默认 2.0）
         cfg = self.cfg_scale if instruction else 1.0
@@ -212,7 +250,7 @@ class BreezeTTSPlugin(Star):
             text=text,
             instructions=instruction or None,
             speed_ratio=self.speed_ratio,
-            loudness_rate=self.loudness_rate,
+            pitch_shift=self.pitch_shift,
             cfg_scale=cfg,
         )
         if not wav:
@@ -338,8 +376,6 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
         text = str(kwargs.get("text") or "").strip()
         if not self.plugin:
             return "插件未正确初始化"
-        if not self.plugin.enable_llm_tool:
-            return "LLM 工具未启用"
         if not text:
             return "文本不能为空"
 
@@ -358,7 +394,7 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
             text=text,
             instructions=instruction or None,
             speed_ratio=self.plugin.speed_ratio,
-            loudness_rate=self.plugin.loudness_rate,
+            pitch_shift=self.plugin.pitch_shift,
             cfg_scale=cfg,
         )
         if not wav:

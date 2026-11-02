@@ -32,14 +32,14 @@
   "breeze_api": {
     "description": "Breeze 服务地址",
     "type": "string",
-    "default": "http://127.0.0.1:9000",
-    "hint": "本地 Breeze TTS 的 HTTP 地址。默认端口 9000（注意 9001 是它的 WebSocket 口）。"
+    "default": "",
+    "hint": "留空 = 自动探测本机 9000 / 9002 / 8000 / 8080；也可填完整地址，如 http://127.0.0.1:9000（9001 是它的 WebSocket 口，别填）。"
   },
   "voice_id": {
     "description": "音色 ID",
     "type": "string",
-    "default": "xiaojing-voice",
-    "hint": "已保存的音色名。必须是服务端 voices 目录里存在的音色，否则会 404。"
+    "default": "",
+    "hint": "留空 = 自动使用服务端第一个音色；有多个时建议明确填写，例如 my-voice。"
   },
   "cfg_scale": {
     "description": "引导强度（1.0 ~ 4.0）",
@@ -80,7 +80,7 @@
       "gentle",
       "whisper"
     ],
-    "hint": "normal=自然；gentle=稍慢稍轻（约 1.2 倍慢、-2dB）；whisper=极慢耳语（约 4 倍慢、-5dB）。仅在自动指令关闭或失败时使用。"
+    "hint": "normal=自然；gentle=稍慢稍轻；whisper=极慢耳语。仅在自动指令关闭或失败时使用。"
   },
   "custom_instruction": {
     "description": "自定义语气指令",
@@ -94,17 +94,11 @@
     "default": 0,
     "hint": "正数=更快，负数=更慢。±50 即 0.5 倍 / 1.5 倍。内置 WSOLA 时间伸缩实现，音调不变。"
   },
-  "loudness_rate": {
-    "description": "音量（-100 ~ 100）",
+  "pitch_shift": {
+    "description": "音调（-12 ~ +12 半音）",
     "type": "int",
     "default": 0,
-    "hint": "每 10 单位约 1 dB，最大 ±6 dB（超出封顶，避免破音）。"
-  },
-  "enable_llm_tool": {
-    "description": "启用「开口说话」工具",
-    "type": "bool",
-    "default": true,
-    "hint": "开启后模型可主动调用 clone_tts，用语音说出指定内容。"
+    "hint": "正数升高、负数降低，0 = 不变。变调不改时长；±4 内最自然，±12 会明显失真。"
   },
   "enable_tts_tool_minmax": {
     "description": "工具调用也校验长度",

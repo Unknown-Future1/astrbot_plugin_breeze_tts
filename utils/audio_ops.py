@@ -1,8 +1,8 @@
 """
-音频后处理：语速（时间伸缩）与音量（增益）。
+音频后处理：语速（时间伸缩）与音调（变调不变速）。
 
 为什么不用 ffmpeg：
-    插件只需要「WAV → 变速/调音量 → WAV」这一条链路，
+    插件只需要「WAV → 变速/变调 → WAV」这一条链路，
     而 ffmpeg 是 60 MB 级的多媒体全家桶，为了两个滤镜背 60 MB 不值。
 
 实现原理：
@@ -11,11 +11,10 @@
         按固定分析步长取帧，在允许的偏移范围内找与上一帧最相似的片段，
         再用汉宁窗做重叠相加，从而在「不改变音调」的前提下伸缩时间轴。
 
-    音量 —— 直接把采样乘以增益系数（对应 ffmpeg 的 `af_volume`：
-        gain = 10 ** (dB / 20)）。
+    音调 —— 重采样改频率（对应 ffmpeg 的 `asetrate`），再用 WSOLA 把时长拉回来。
 
 对外接口：
-    process(wav_bytes, speed_ratio, loudness_rate) -> wav_bytes | None
+    process(wav_bytes, speed_ratio, pitch_shift) -> wav_bytes | None
 """
 
 from __future__ import annotations
@@ -37,7 +36,6 @@ except Exception:  # noqa: BLE001
 WSOLA_FRAME = 1024   # 分析帧长（采样点），约 42 ms @ 24 kHz
 WSOLA_TOLERANCE = 256  # 相似度搜索半径（互补搜索范围）
 WSOLA_STEP = 8       # 搜索步长：越小越准、越慢
-VOLUME_DB_LIMIT = 6.0  # 音量增益上限（±6 dB，超过容易破音）
 
 
 # ================================================================ WAV 读写
@@ -202,7 +200,21 @@ def _wsola(x, factor: float):
     out[valid] /= weight[valid]
 
     target = int(round(n * factor))
-    return out[:target]
+    out = out[:target]
+
+    # 响度补偿：重叠相加时相邻帧会有相位抵消，压缩得越狠电平掉得越多
+    # （实测 ×2.0 时约 -0.8 dB）。这里按输入 RMS 还原整体电平，
+    # 保证「变速不改响度」。
+    try:
+        src_rms = float(np.sqrt(np.mean(x ** 2)))
+        out_rms = float(np.sqrt(np.mean(out ** 2)))
+        if src_rms > 1e-6 and out_rms > 1e-6:
+            gain = src_rms / out_rms
+            out = out * float(max(0.5, min(2.0, gain)))
+    except Exception:  # noqa: BLE001
+        pass
+
+    return out
 
 
 def speed_factor(speed_ratio: int) -> float:
@@ -219,26 +231,96 @@ def speed_factor(speed_ratio: int) -> float:
     return 1.0 / playback                    # 时长倍率
 
 
-def volume_gain(loudness_rate: int) -> float:
-    """
-    把 loudness_rate 换算成线性增益。
 
-    每 10 单位约合 1 dB，上限 ±6 dB（对应 ffmpeg af_volume 的 volume 系数）。
+
+# ================================================================ 音调（变调不变速）
+
+PITCH_SEMITONE_LIMIT = 12   # 最多 ±12 个半音（一个八度）
+
+
+def _resample(x, ratio: float):
     """
-    db = max(-VOLUME_DB_LIMIT, min(VOLUME_DB_LIMIT, (loudness_rate or 0) / 10.0))
-    return 10.0 ** (db / 20.0)
+    线性插值重采样。
+
+    ratio > 1 → 采样变稀 → 时长缩短、音调升高（像快放）
+    ratio < 1 → 采样变密 → 时长变长、音调降低（像慢放）
+    """
+    n = x.shape[0]
+    out_len = int(round(n / ratio))
+    if out_len < 1 or n < 2:
+        return x
+    dst_idx = np.arange(out_len, dtype=np.float64) * ratio
+    np.clip(dst_idx, 0, n - 1, out=dst_idx)
+    src_idx = np.arange(n, dtype=np.float64)
+    return np.interp(dst_idx, src_idx, x).astype(np.float32)
+
+
+def pitch_ratio(semitones: int) -> float:
+    """
+    半音数 → 频率倍率。
+
+    每 12 个半音翻一倍：+12 → 2.0，-12 → 0.5，+7 → 1.498（纯五度）。
+    """
+    n = max(-PITCH_SEMITONE_LIMIT, min(PITCH_SEMITONE_LIMIT, int(semitones or 0)))
+    return 2.0 ** (n / 12.0)
+
+
+def apply_pitch(x, semitones: int):
+    """
+    变调但**不改时长**（对应 ffmpeg 的 `asetrate` + `atempo` 组合）。
+
+    做法：
+        ① 重采样  → 音调变化、时长也变了（那不是我们要的）
+        ② WSOLA 拉伸回原时长 → 音调保持在新的高度
+
+    副作用：重采样会连共振峰一起搬，±12 个半音内可接受，
+    超过就会有"花栗鼠 / 低沉怪"的感觉（这也是所有纯变速变调方案的共性）。
+    """
+    if not semitones:
+        return x
+
+    ratio = pitch_ratio(semitones)
+    if abs(ratio - 1.0) < 0.001:
+        return x
+
+    shifted = _resample(x, ratio)
+    if shifted.shape[0] < 2:
+        return x
+
+    # 重采样后时长变成 len/ratio，用 factor=ratio 拉回原长度
+    restored = _wsola(shifted, ratio)
+
+    # 长度对齐到原始长度，避免尾部多/少几十个采样
+    n = x.shape[0]
+    if restored.shape[0] > n:
+        restored = restored[:n]
+    elif restored.shape[0] < n:
+        restored = np.pad(restored, (0, n - restored.shape[0]))
+    return restored
 
 
 # ================================================================ 调度入口
 
-def process(wav_bytes: bytes, speed_ratio: int = 0, loudness_rate: int = 0) -> bytes | None:
+def _safe_int(value, default: int = 0) -> int:
+    """把配置值安全地转成 int（可能是 str / float / None）。"""
+    if value is None or value == "":
+        return default
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        logger.warning(f"[BreezeTTS] 后处理参数无法解析为数字：{value!r}，按 0 处理")
+        return default
+
+
+def process(wav_bytes: bytes, speed_ratio: int = 0,
+            pitch_shift: int = 0) -> bytes | None:
     """
-    对一段 WAV 做语速 / 音量后处理。
+    对一段 WAV 做语速 / 音调后处理。
 
     参数：
         wav_bytes      : 输入 WAV 字节（单声道，24 kHz 为主）
         speed_ratio    : -50 ~ 100，正数更快、负数更慢；0 表示不变
-        loudness_rate  : -100 ~ 100，每 10 单位约 1 dB，封顶 ±6 dB；0 表示不变
+        pitch_shift    : -12 ~ +12 半音，正数升高、负数降低；0 表示不变
 
     返回：
         处理后的 WAV 字节；如果没有需要处理的项，原样返回输入；
@@ -247,13 +329,17 @@ def process(wav_bytes: bytes, speed_ratio: int = 0, loudness_rate: int = 0) -> b
     if not wav_bytes:
         return None
 
-    need_speed = bool(speed_ratio)
-    need_volume = bool(loudness_rate)
-    if not need_speed and not need_volume:
+    # 防御：配置可能是字符串（"30"）或浮点（30.0），统一转成 int
+    speed_ratio = _safe_int(speed_ratio)
+    pitch_shift = _safe_int(pitch_shift)
+
+    need_speed = speed_ratio != 0
+    need_pitch = pitch_shift != 0
+    if not need_speed and not need_pitch:
         return wav_bytes
 
     if not _HAS_NUMPY:
-        logger.warning("[BreezeTTS] 环境缺少 numpy，跳过语速/音量后处理")
+        logger.warning("[BreezeTTS] 环境缺少 numpy，跳过语速/音调后处理")
         return wav_bytes
 
     try:
@@ -266,6 +352,12 @@ def process(wav_bytes: bytes, speed_ratio: int = 0, loudness_rate: int = 0) -> b
 
         notes = []
 
+        # ---- 音调（变调不变速）：先做，因为它只改频率不改时长 ----
+        if need_pitch:
+            arr = apply_pitch(arr, pitch_shift)
+            ratio = pitch_ratio(pitch_shift)
+            notes.append(f"音调{pitch_shift:+d}半音（×{ratio:.3f}）")
+
         # ---- 语速（时间伸缩，音调不变）----
         if need_speed:
             factor = speed_factor(speed_ratio)
@@ -275,18 +367,6 @@ def process(wav_bytes: bytes, speed_ratio: int = 0, loudness_rate: int = 0) -> b
             else:
                 notes.append(f"语速{speed_ratio:+d}（改变过小，忽略）")
 
-        # ---- 音量（线性增益）----
-        if need_volume:
-            gain = volume_gain(loudness_rate)
-            if abs(gain - 1.0) > 0.005:
-                arr = arr * gain
-                clipped = int(np.count_nonzero(np.abs(arr) > 1.0))
-                arr = np.clip(arr, -1.0, 1.0)
-                db = 20.0 * float(np.log10(gain))
-                note = f"音量{db:+.1f}dB"
-                if clipped:
-                    note += f"（{clipped} 个采样触顶削波）"
-                notes.append(note)
 
         out = _build_wav(arr, sample_rate)
         elapsed_ms = (_time.perf_counter() - started) * 1000
@@ -307,11 +387,11 @@ def process(wav_bytes: bytes, speed_ratio: int = 0, loudness_rate: int = 0) -> b
         return wav_bytes
 
 
-def describe_effects(speed_ratio: int = 0, loudness_rate: int = 0) -> str:
+def describe_effects(speed_ratio: int = 0, pitch_shift: int = 0) -> str:
     """给日志/自检用：把当前配置翻译成一句话。"""
     parts = []
     if speed_ratio:
         parts.append(f"语速×{1.0 / speed_factor(speed_ratio):.2f}")
-    if loudness_rate:
-        parts.append(f"音量{20.0 * __import__('math').log10(volume_gain(loudness_rate)):+.1f}dB")
+    if pitch_shift:
+        parts.append(f"音调{pitch_shift:+d}半音")
     return "、".join(parts) if parts else "无后处理"

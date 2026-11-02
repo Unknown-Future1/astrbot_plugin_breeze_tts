@@ -2,7 +2,7 @@
 
 <p align="center">
   使用<strong>本地模型克隆的自定义音色</strong>，让你的<strong>大肥鱼</strong>进行语音回复。<br/>
-  支持克隆音色、语速与音量调节，<strong>无需任何 API Key、不按字计费、不依赖外网</strong>。
+  支持克隆音色、语速与音调调节，<strong>无需任何 API Key、不按字计费、不依赖外网</strong>。
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 - **效果可观**：中英双语、音色克隆、语气导演、文字造音色，一套齐全
 - **完全本地**：无 API Key、不按字计费、断网也能用
 
-![各量化版本的体积与显存占用](https://raw.githubusercontent.com/Unknown-Future1/astrbot_plugin_breeze_tts/main/docs/model-vram.png)
+![各量化版本的体积与显存占用](docs/model-vram.png)
 
 > 📌 上图来自官方文档，标的是**模型本身**的显存占用。
 > **实测提醒**：本机（独显模式）跑 Q8_0 时 `nvidia-smi` 显示约 **6.5 GB** ——
@@ -46,11 +46,11 @@
 | 🎙️ 音色克隆 | 3~10 秒参考音频 + 准确转写即可复刻音色 |
 | 🎭 语气控制 | LLM 分析情绪自动生成配音指令，也可手写 |
 | ⚡ **精确语速** | 内置 WSOLA 时间伸缩，音调不变，实测误差 0%（不是靠提示词"约一下"） |
-| 🔊 **精确音量** | 线性增益，误差实测 0.00 dB，封顶 ±6 dB 防破音 |
+| 🎚️ **音调调节** | ±12 半音，**变调不改时长**；FFT 实测频率误差 < 0.6% |
 | 🎲 概率触发 | 0~100% 可调，控制语音出现频率 |
 | 📏 长度门限 | 防止过短语怪、过长等太久 |
 | 🚫 屏蔽词 | 不适合朗读的内容自动跳过 |
-| 🛠️ LLM 工具 | `clone_tts` 让模型主动说话 |
+| 🛠️ LLM 工具 | `clone_tts` 让模型主动说话（随插件启用，无单独开关） |
 | 🛡️ 优雅降级 | 服务挂了只记日志，**绝不吞掉文字回复** |
 | 🔁 并发退避 | 服务忙（409）自动重试 3 次（0.3/0.6/1.2 s） |
 
@@ -61,13 +61,13 @@
 1. **AstrBot** ≥ v4.29.3 已安装并正常运行
 2. **本地 Breeze TTS 2 服务**已部署并运行（默认 `http://127.0.0.1:9000`）
 3. **至少一个已保存的音色**（服务端 `voices` 目录里存在）
-4. **无需 ffmpeg** —— 语速/音量用内置的 numpy 实现（AstrBot 自带 numpy），不依赖任何外部程序
+4. **无需 ffmpeg** —— 语速/音调用内置的 numpy 实现（AstrBot 自带 numpy），不依赖任何外部程序
 
 ### 部署模型与服务（一次性）
 
 #### 最省事：直接让 DSH 代劳
 
-![在 DSH 里让它下载项目、选量化版、配好 9000 端口](https://raw.githubusercontent.com/Unknown-Future1/astrbot_plugin_breeze_tts/main/docs/dsh-deploy.png)
+![在 DSH 里让它下载项目、选量化版、配好 9000 端口](docs/dsh-deploy.png)
 
 ---
 
@@ -123,7 +123,7 @@
 
 服务起来后可以打开模型可视化网页（`http://127.0.0.1:9000/`）：
 
-![模型可视化网页](https://raw.githubusercontent.com/Unknown-Future1/astrbot_plugin_breeze_tts/main/docs/webui.png)
+![模型可视化网页](docs/webui.png)
 
 ---
 
@@ -131,7 +131,7 @@
 
 对着 DSH 说这句话，它会帮你转码、上传、注册成音色：
 
-![让 DSH 帮你克隆音色](https://raw.githubusercontent.com/Unknown-Future1/astrbot_plugin_breeze_tts/main/docs/dsh-clone.png)
+![让 DSH 帮你克隆音色](docs/dsh-clone.png)
 
 三个占位符怎么填：
 
@@ -161,24 +161,23 @@
 | `min_length` | `int` | `5` | 最短合成字数，短于它不合成 |
 | `max_length` | `int` | `50` | 最长合成字数，**超过直接跳过**（不截断，避免半句话） |
 | `blocked_words` | `list` | `[]` | 命中任一屏蔽词则跳过语音，文字照发 |
-| `voice_id` | `string` | `xiaojing-voice` | 已保存的音色名，必须是服务端存在的音色 |
+| `voice_id` | `string` | `""` | 音色名。**留空自动用服务端第一个音色**；有多个时建议明确填写 |
 | `style_preset` | `string` | `normal` | `normal` / `gentle` / `whisper` 三档静态预设 |
 | `speed_ratio` | `int` | `0` | **正数=更快，负数=更慢**，范围 -50~100（±50 即 0.5/1.5 倍） |
-| `loudness_rate` | `int` | `0` | 每 10 单位约 1 dB，**封顶 ±6 dB**（避免破音） |
+| `pitch_shift` | `int` | `0` | **音调（半音）**，-12 ~ +12；正数升高、负数降低，**时长不变** |
 
 ### 进阶参数（一般不用改）
 
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `breeze_api` | `string` | `http://127.0.0.1:9000` | 本地服务地址（9001 是它的 WebSocket 口，不要填） |
+| `breeze_api` | `string` | `""` | 服务地址。**留空自动探测** 9000 / 9002 / 8000 / 8080（9001 是 WebSocket 口，别填） |
 | `cfg_scale` | `float` | `2.0` | 引导强度 1.0~4.0，**只在有语气指令时生效** |
 | `seed` | `int` | `42` | 随机种子，固定则同文本生成同音频 |
 | `timeout` | `int` | `30` | 单次请求超时（秒） |
 | `enable_auto_instruction` | `bool` | `true` | 每次合成前多调一次 LLM 分析情绪生成配音指令 |
 | `llm_recognition` | `string` | `""` | 生成指令所用模型，留空=当前会话模型 |
 | `custom_instruction` | `text` | `""` | 手写指令，**优先级最高**，填了就用它 |
-| `enable_llm_tool` | `bool` | `true` | 启用 `clone_tts` 工具，让 AI 主动"开口说话" |
 | `enable_tts_tool_minmax` | `bool` | `true` | 工具调用是否也受长度限制 |
 | `enable_llm_response` | `bool` | `false` | `false`=群里只看到语音；`true`=文字+语音都发 |
 
@@ -208,11 +207,11 @@
 
 **实际效果：**
 
-![QQ 里收到语音回复](https://raw.githubusercontent.com/Unknown-Future1/astrbot_plugin_breeze_tts/main/docs/qq-effect.png)
+![QQ 里收到语音回复](docs/qq-effect.png)
 
 **日志里能看到生成耗时（生成速度一并可见）：**
 
-![生成速度日志](https://raw.githubusercontent.com/Unknown-Future1/astrbot_plugin_breeze_tts/main/docs/log-speed.png)
+![生成速度日志](docs/log-speed.png)
 
 ---
 
@@ -233,12 +232,12 @@
 
 服务并发槽被打满。**启动服务时把 `--parallel` 调到 4 或更高**（带 guidance 的流占两个槽）。
 
-### 语速/音量不起作用
+### 语速/音调不起作用
 
 日志里会有：
 
 ```
-[BreezeTTS] 环境缺少 numpy，语速/音量后处理将不生效
+[BreezeTTS] 环境缺少 numpy，语速/音调后处理将不生效
 ```
 
 AstrBot 默认自带 numpy，正常情况不会出现；若真出现，重装 AstrBot 的运行环境即可。

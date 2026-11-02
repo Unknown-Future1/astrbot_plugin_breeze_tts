@@ -5,7 +5,11 @@
   2. 409 并发退避重试
   3. 健康探活
 
-语速/音量的后处理在 utils/audio_ops.py 里（纯 numpy 实现，不依赖 ffmpeg）。
+另外负责两处「自动识别」，避免把作者本机的配置写死给所有人：
+  · 服务地址：没填就依次探测本机常见端口
+  · 音色    ：没填就用服务端已保存的第一个音色
+
+语速/音调的后处理在 utils/audio_ops.py 里（纯 numpy 实现，不依赖 ffmpeg）。
 """
 
 from __future__ import annotations
@@ -19,8 +23,10 @@ from astrbot.api import logger
 
 from ..utils import audio_ops
 
-DEFAULT_API = "http://127.0.0.1:9000"
-DEFAULT_VOICE = "xiaojing-voice"
+# 本机常见端口（9001 是 Breeze 的 WebSocket 端口，故意跳过）
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 9000
+CANDIDATE_PORTS = (9000, 9002, 8000, 8080)
 
 
 class BreezeTTSClient:
@@ -28,25 +34,26 @@ class BreezeTTSClient:
 
     def __init__(
         self,
-        api_base: str = DEFAULT_API,
-        voice: str = DEFAULT_VOICE,
+        api_base: str = "",
+        voice: str = "",
         cfg_scale: float = 2.0,
         seed: int = 42,
         timeout: int = 30,
     ) -> None:
-        self.api_base = (api_base or DEFAULT_API).rstrip("/")
-        self.voice = voice
+        # 留空表示「还没确定」，等 initialize 里自动探测
+        self.api_base = (api_base or "").rstrip("/")
+        self.voice = voice or ""
         self.cfg_scale = cfg_scale
         self.seed = seed
         self.timeout = timeout
 
     # ---------------------------------------------------------------- 探活
-    async def health(self, timeout: float = 3.0) -> bool:
-        """服务是否就绪（/health 返回 status=ok）"""
+    async def _health_at(self, base: str, timeout: float = 1.5) -> bool:
+        """指定地址是否是一个可用的 Breeze 服务"""
         try:
             to = aiohttp.ClientTimeout(total=timeout)
             async with aiohttp.ClientSession(timeout=to) as session:
-                async with session.get(f"{self.api_base}/health") as resp:
+                async with session.get(f"{base}/health") as resp:
                     if resp.status != 200:
                         return False
                     data = await resp.json(content_type=None)
@@ -54,14 +61,51 @@ class BreezeTTSClient:
         except Exception:  # noqa: BLE001
             return False
 
+    async def health(self, timeout: float = 3.0) -> bool:
+        """服务是否就绪（/health 返回 status=ok）"""
+        return await self._health_at(self.base, timeout)
+
+    # ------------------------------------------------------------ 自动识别
+    async def probe(self, host: str = DEFAULT_HOST,
+                    ports: tuple[int, ...] = CANDIDATE_PORTS) -> str | None:
+        """
+        依次探测本机常见端口，返回第一个能响应的服务地址。
+
+        用于「用户没填 breeze_api」的情况 —— 装上插件就能用，不用去翻端口号。
+        """
+        for port in ports:
+            base = f"http://{host}:{port}"
+            if await self._health_at(base):
+                self.api_base = base
+                logger.info(f"[BreezeTTS] 自动探测到服务：{base}")
+                return base
+        return None
+
+    async def detect_voice(self) -> str | None:
+        """
+        返回服务端已保存的第一个音色（没有则 None）。
+
+        用于「用户没填 voice_id」的情况。
+        """
+        voices = await self.list_voices()
+        if not voices:
+            return None
+        self.voice = voices[0]
+        return self.voice
+
+    @property
+    def base(self) -> str:
+        """当前服务地址；没设置时给出默认值（仅用于拼 URL，不代表已连通）"""
+        return self.api_base or f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
+
     # ---------------------------------------------------------------- 生成
     async def synth(
         self,
         text: str,
         instructions: str | None = None,
         speed_ratio: int = 0,
-        loudness_rate: int = 0,
         cfg_scale: float | None = None,
+        pitch_shift: int = 0,
     ) -> bytes | None:
         """
         合成语音，返回处理后 WAV 的字节；失败返回 None（调用方负责降级）。
@@ -76,9 +120,9 @@ class BreezeTTSClient:
         if wav is None:
             return None
 
-        # 数值后处理（纯 numpy：WSOLA 时间伸缩 + 线性增益，不依赖 ffmpeg）
-        if speed_ratio or loudness_rate:
-            processed = audio_ops.process(wav, speed_ratio, loudness_rate)
+        # 数值后处理（纯 numpy：变调 / WSOLA 变速，不依赖 ffmpeg）
+        if speed_ratio or pitch_shift:
+            processed = audio_ops.process(wav, speed_ratio, pitch_shift)
             if processed is not None:
                 wav = processed
 
@@ -108,7 +152,7 @@ class BreezeTTSClient:
                 to = aiohttp.ClientTimeout(total=self.timeout)
                 async with aiohttp.ClientSession(timeout=to) as session:
                     async with session.post(
-                        f"{self.api_base}/v1/audio/speech", json=payload
+                        f"{self.base}/v1/audio/speech", json=payload
                     ) as resp:
                         if resp.status == 200:
                             wav = await resp.read()
@@ -153,7 +197,7 @@ class BreezeTTSClient:
         try:
             to = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=to) as session:
-                async with session.get(f"{self.api_base}/v1/voices") as resp:
+                async with session.get(f"{self.base}/v1/voices") as resp:
                     if resp.status != 200:
                         return []
                     data = await resp.json(content_type=None)
