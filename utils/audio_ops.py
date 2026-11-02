@@ -1,17 +1,12 @@
 """
 音频后处理：语速（时间伸缩）与音调（变调不变速）。
 
-为什么不用 ffmpeg：
-    插件只需要「WAV → 变速/变调 → WAV」这一条链路，
-    而 ffmpeg 是 60 MB 级的多媒体全家桶，为了两个滤镜背 60 MB 不值。
-
-实现原理：
-    语速 —— WSOLA（Waveform Similarity Overlap-Add，波形相似叠加）。
-        参考 ffmpeg 的 `af_atempo` 滤镜（libavfilter/af_atempo.c）思路：
+实现原理（纯 numpy，不依赖任何外部程序）：
+    语速 —— WSOLA（Waveform Similarity Overlap-Add，波形相似叠加）：
         按固定分析步长取帧，在允许的偏移范围内找与上一帧最相似的片段，
         再用汉宁窗做重叠相加，从而在「不改变音调」的前提下伸缩时间轴。
 
-    音调 —— 重采样改频率（对应 ffmpeg 的 `asetrate`），再用 WSOLA 把时长拉回来。
+    音调 —— 重采样改频率，再用 WSOLA 把时长拉回来（变调不变速）。
 
 对外接口：
     process(wav_bytes, speed_ratio, pitch_shift) -> wav_bytes | None
@@ -45,7 +40,7 @@ def _parse_wav(data: bytes) -> tuple[list, int]:
     解析 WAV 字节流，返回 (采样列表, 采样率)。
 
     只做插件真正会遇到的情况：PCM 16bit，以及 8/24/32bit 的兜底转换。
-    参考 ffmpeg 的 wav demuxer 行为：按 chunk 逐个跳过，直到找到 fmt / data。
+    按 RIFF chunk 逐个跳过，直到找到 fmt / data。
     """
     if len(data) < 12 or data[0:4] != b"RIFF" or data[8:12] != b"WAVE":
         raise ValueError("不是合法的 WAV 数据（缺少 RIFF/WAVE 头）")
@@ -147,7 +142,7 @@ def _wsola(x, factor: float):
     factor > 1 → 变慢（变长）；factor < 1 → 变快（变短）。
     音调保持不变（这是与"直接重采样"的本质区别）。
 
-    对应 ffmpeg 的 af_atempo.c：
+    做法：
         - 分析步长固定、合成步长按 factor 缩放
         - 每帧在 ±tolerance 内做相似度搜索，取相关度最高的位置
         - 汉宁窗重叠相加，最后按窗函数累加和归一化
@@ -267,7 +262,7 @@ def pitch_ratio(semitones: int) -> float:
 
 def apply_pitch(x, semitones: int):
     """
-    变调但**不改时长**（对应 ffmpeg 的 `asetrate` + `atempo` 组合）。
+    变调但**不改时长**。
 
     做法：
         ① 重采样  → 音调变化、时长也变了（那不是我们要的）

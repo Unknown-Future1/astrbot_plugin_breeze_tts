@@ -140,9 +140,8 @@ class BreezeTTSPlugin(Star):
                 self.breeze_api = found
             else:
                 logger.warning(
-                    "[BreezeTTS] 未配置 breeze_api，且本机常见端口（9000/9002/8000/8080）"
-                    "都没探测到服务；请先启动 start-breeze.cmd，"
-                    "或在插件配置里填上正确地址"
+                    "[BreezeTTS] 未配置 breeze_api，且默认端口 9000 没探测到服务；"
+                    "请先启动 start-breeze.cmd，或在插件配置里填上正确地址"
                 )
                 return
 

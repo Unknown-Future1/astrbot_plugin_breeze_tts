@@ -33,7 +33,7 @@
     "description": "Breeze 服务地址",
     "type": "string",
     "default": "",
-    "hint": "留空 = 自动探测本机 9000 / 9002 / 8000 / 8080；也可填完整地址，如 http://127.0.0.1:9000（9001 是它的 WebSocket 口，别填）。"
+    "hint": "留空 = 自动探测本机 9000 端口；也可填完整地址（9001 是它的 WebSocket 口，别填）。"
   },
   "voice_id": {
     "description": "音色 ID",

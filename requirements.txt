@@ -1,6 +1,6 @@
 # 依赖说明
 #
-# 本插件**不需要 ffmpeg**：语速/音量由内置的 numpy 实现完成。
+# 语速 / 音调由内置的 numpy 实现完成，不依赖任何外部程序。
 # numpy 由 AstrBot 自带，无需额外安装。
 #
 # aiohttp  —— 调用 Breeze 的 HTTP 接口（AstrBot 自带）

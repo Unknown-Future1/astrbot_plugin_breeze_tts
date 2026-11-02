@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.2.0-blue" alt="version" />
   <img src="https://img.shields.io/badge/AstrBot-%E2%89%A5%204.29.3-orange" alt="astrbot" />
   <img src="https://img.shields.io/badge/backend-Breeze%20TTS%202-4f9cf9" alt="backend" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
@@ -27,7 +27,7 @@
 - **效果可观**：中英双语、音色克隆、语气导演、文字造音色，一套齐全
 - **完全本地**：无 API Key、不按字计费、断网也能用
 
-![各量化版本的体积与显存占用](docs/model-vram.png)
+![各量化版本的体积与显存占用](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/model-vram.png)
 
 > 📌 上图来自官方文档，标的是**模型本身**的显存占用。
 > **实测提醒**：本机（独显模式）跑 Q8_0 时 `nvidia-smi` 显示约 **6.5 GB** ——
@@ -59,15 +59,15 @@
 ## 📋 前置要求
 
 1. **AstrBot** ≥ v4.29.3 已安装并正常运行
-2. **本地 Breeze TTS 2 服务**已部署并运行（默认 `http://127.0.0.1:9000`）
+2. **本地 Breeze TTS 2 服务**已部署并运行（端口 9000，插件会自动探测）
 3. **至少一个已保存的音色**（服务端 `voices` 目录里存在）
-4. **无需 ffmpeg** —— 语速/音调用内置的 numpy 实现（AstrBot 自带 numpy），不依赖任何外部程序
+4. **无需外部程序** —— 语速/音调用内置的 numpy 实现（AstrBot 自带 numpy），装上就能用
 
 ### 部署模型与服务（一次性）
 
 #### 最省事：直接让 DSH 代劳
 
-![在 DSH 里让它下载项目、选量化版、配好 9000 端口](docs/dsh-deploy.png)
+![在 DSH 里让它下载项目、选量化版、配好 9000 端口](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/dsh-deploy.png)
 
 ---
 
@@ -116,14 +116,13 @@
 > [!IMPORTANT]
 > ### 🔌 关掉窗口 = 服务立即停止 + 显存立刻释放
 >
-> 
 > 窗口一关，`breeze-server.exe` 由系统内核回收，**不会留下吃显存的孤儿进程**。
 >
 > 想彻底手动停，也可以双击 `stop-breeze.cmd`。
 
 服务起来后可以打开模型可视化网页（`http://127.0.0.1:9000/`）：
 
-![模型可视化网页](docs/webui.png)
+![模型可视化网页](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/webui.png)
 
 ---
 
@@ -131,13 +130,13 @@
 
 对着 DSH 说这句话，它会帮你转码、上传、注册成音色：
 
-![让 DSH 帮你克隆音色](docs/dsh-clone.png)
+![让 DSH 帮你克隆音色](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/dsh-clone.png)
 
 三个占位符怎么填：
 
 | 占位符 | 填什么 | 注意 |
 | --- | --- | --- |
-| `【何处】` | 音频文件路径 | **模型只接受 WAV**；mp3 / m4a 等要先转码（DSH 会自动用 ffmpeg 转成 24kHz 单声道 WAV） |
+| `【何处】` | 音频文件路径 | **模型只接受 WAV**；mp3 / m4a 等要先转码（在 DSH 里说一句就会帮你转成 24kHz 单声道 WAV） |
 | `【音色名】` | 音色的名字 | **只能用英文 / 数字 / `-` / `_`** |
 | `【…所有字】` | 音频里人物说的每一个字 | **必须逐字一致**，错一个字韵律就跑偏 |
 
@@ -168,10 +167,9 @@
 
 ### 进阶参数（一般不用改）
 
-
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `breeze_api` | `string` | `""` | 服务地址。**留空自动探测** 9000 / 9002 / 8000 / 8080（9001 是 WebSocket 口，别填） |
+| `breeze_api` | `string` | `""` | 服务地址。**留空自动探测** 9000（9001 是 WebSocket 口，别填） |
 | `cfg_scale` | `float` | `2.0` | 引导强度 1.0~4.0，**只在有语气指令时生效** |
 | `seed` | `int` | `42` | 随机种子，固定则同文本生成同音频 |
 | `timeout` | `int` | `30` | 单次请求超时（秒） |
@@ -197,7 +195,7 @@
 
 ## 📖 使用方式
 
-开启 `enable_llm_tool` 后，AI 知道自己有 `clone_tts` 工具，会在「用户想听声音」时主动调用：
+插件启用后，AI 就拥有 `clone_tts` 工具，会在「用户想听声音」时主动调用：
 
 ```json
 {"text": "你好呀，我是溟月", "context_texts": "轻快亲切，语速稍慢"}
@@ -207,11 +205,11 @@
 
 **实际效果：**
 
-![QQ 里收到语音回复](docs/qq-effect.png)
+![QQ 里收到语音回复](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/qq-effect.png)
 
 **日志里能看到生成耗时（生成速度一并可见）：**
 
-![生成速度日志](docs/log-speed.png)
+![生成速度日志](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/log-speed.png)
 
 ---
 

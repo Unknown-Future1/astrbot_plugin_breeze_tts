@@ -6,10 +6,10 @@
   3. 健康探活
 
 另外负责两处「自动识别」，避免把作者本机的配置写死给所有人：
-  · 服务地址：没填就依次探测本机常见端口
+  · 服务地址：没填就探测默认端口 9000
   · 音色    ：没填就用服务端已保存的第一个音色
 
-语速/音调的后处理在 utils/audio_ops.py 里（纯 numpy 实现，不依赖 ffmpeg）。
+语速/音调的后处理在 utils/audio_ops.py 里（纯 numpy 实现）。
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from ..utils import audio_ops
 # 本机常见端口（9001 是 Breeze 的 WebSocket 端口，故意跳过）
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
-CANDIDATE_PORTS = (9000, 9002, 8000, 8080)
+CANDIDATE_PORTS = (DEFAULT_PORT,)
 
 
 class BreezeTTSClient:
@@ -69,7 +69,7 @@ class BreezeTTSClient:
     async def probe(self, host: str = DEFAULT_HOST,
                     ports: tuple[int, ...] = CANDIDATE_PORTS) -> str | None:
         """
-        依次探测本机常见端口，返回第一个能响应的服务地址。
+        探测默认端口（9000），返回能响应的服务地址。
 
         用于「用户没填 breeze_api」的情况 —— 装上插件就能用，不用去翻端口号。
         """
@@ -120,7 +120,7 @@ class BreezeTTSClient:
         if wav is None:
             return None
 
-        # 数值后处理（纯 numpy：变调 / WSOLA 变速，不依赖 ffmpeg）
+        # 数值后处理（纯 numpy：变调 / WSOLA 变速）
         if speed_ratio or pitch_shift:
             processed = audio_ops.process(wav, speed_ratio, pitch_shift)
             if processed is not None:
