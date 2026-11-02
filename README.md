@@ -27,7 +27,7 @@
 - **效果可观**：中英双语、音色克隆、语气导演、文字造音色，一套齐全
 - **完全本地**：无 API Key、不按字计费、断网也能用
 
-![各量化版本的体积与显存占用](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/model-vram.png)
+![各量化版本的体积与显存占用](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/model-vram.png)
 
 > 📌 上图来自官方文档，标的是**模型本身**的显存占用。
 > **实测提醒**：本机（独显模式）跑 Q8_0 时 `nvidia-smi` 显示约 **6.5 GB** ——
@@ -67,7 +67,7 @@
 
 #### 最省事：直接让 DSH 代劳
 
-![在 DSH 里让它下载项目、选量化版、配好 9000 端口](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/dsh-deploy.png)
+![在 DSH 里让它下载项目、选量化版、配好 9000 端口](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/dsh-deploy.png)
 
 ---
 
@@ -122,7 +122,7 @@
 
 服务起来后可以打开模型可视化网页（`http://127.0.0.1:9000/`）：
 
-![模型可视化网页](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/webui.png)
+![模型可视化网页](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/webui.png)
 
 ---
 
@@ -130,7 +130,7 @@
 
 对着 DSH 说这句话，它会帮你转码、上传、注册成音色：
 
-![让 DSH 帮你克隆音色](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/dsh-clone.png)
+![让 DSH 帮你克隆音色](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/dsh-clone.png)
 
 三个占位符怎么填：
 
@@ -205,11 +205,11 @@
 
 **实际效果：**
 
-![QQ 里收到语音回复](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/qq-effect.png)
+![QQ 里收到语音回复](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/qq-effect.png)
 
 **日志里能看到生成耗时（生成速度一并可见）：**
 
-![生成速度日志](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@main/docs/log-speed.png)
+![生成速度日志](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/log-speed.png)
 
 ---
 
