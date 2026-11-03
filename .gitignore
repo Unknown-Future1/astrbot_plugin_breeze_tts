@@ -37,3 +37,6 @@ runtime/
 
 # ---- 打包产物 ----
 astrbot_plugin_breeze_tts-*.zip
+
+# ---- 文档配图（走 jsDelivr 云端，本地 docs/ 不入库）----
+docs/
