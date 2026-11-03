@@ -63,8 +63,8 @@ def register_web_apis(plugin) -> None:
             "model_dir": plugin.model_dir,
             "model_file": plugin.model_file,
             "service_port": plugin.service_port,
-            "service_parallel": plugin.service_parallel,
             "auto_start_service": bool(plugin.auto_start_service),
+            "voice_id": getattr(plugin, "voice_id", ""),
         }
         return jsonify(payload)
 
@@ -216,6 +216,38 @@ def register_web_apis(plugin) -> None:
             message += "；插件重载失败，重载后完全生效"
         return jsonify({"ok": True, "enabled": enabled, "applied": applied, "message": message})
 
+    # ------------------------------------------------------------- 音色切换
+    async def voice():
+        """切换音色：只改运行中的客户端 + 落盘配置，不重载插件、不碰服务。"""
+        body = await request.get_json(silent=True) or {}
+        raw = body.get("voice_id")
+        if raw is None:
+            return jsonify({"ok": False, "message": "缺少 voice_id 参数"}), 400
+        voice_id = str(raw).strip()
+
+        available = [v["id"] for v in await _run(manager().voices)]
+        if voice_id and available and voice_id not in available:
+            return jsonify(
+                {"ok": False, "message": f"服务端没有这个音色：{voice_id}（现有：{', '.join(available)}）"}
+            ), 400
+
+        merged = dict(plugin.config)
+        merged["voice_id"] = voice_id
+        try:
+            plugin.config.save_config(merged)
+        except Exception:  # noqa: BLE001
+            logger.exception("[BreezeTTS] 保存音色失败")
+            return jsonify({"ok": False, "message": "保存配置失败，看一下 AstrBot 日志"}), 500
+
+        plugin.voice_id = voice_id
+        plugin.client.voice = voice_id
+        if voice_id:
+            message = f"音色已切换：{voice_id}"
+        else:
+            await plugin._refresh_voice()
+            message = f"已设为自动，当前使用：{plugin.voice_id or '（暂无可用音色）'}"
+        return jsonify({"ok": True, "voice_id": plugin.voice_id, "message": message})
+
     add("status", status, ["GET"], "本地服务状态")
     add("log", log, ["GET"], "服务日志尾巴")
     add("validate", validate, ["GET"], "检查模型目录")
@@ -226,5 +258,6 @@ def register_web_apis(plugin) -> None:
     add("restart", restart, ["POST"], "重启本地服务")
     add("config", config, ["GET", "POST"], "读写服务相关配置")
     add("auto_start", auto_start, ["POST"], "自动拉起一体开关")
+    add("voice", voice, ["POST"], "切换音色")
 
     logger.debug("[BreezeTTS] Web API 已注册")

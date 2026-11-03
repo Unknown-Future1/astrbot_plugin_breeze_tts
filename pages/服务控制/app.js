@@ -99,8 +99,6 @@ function renderStatus(st) {
   $("fact-model").textContent = st.model_name
     ? `${st.model_name}${st.model_size ? `（${st.model_size}）` : ""}`
     : "没找到 .gguf";
-  const voices = st.voices || [];
-  $("fact-voices").textContent = voices.length ? `${voices.length} 个` : "—";
   $("service-hint").textContent = st.healthy
     ? `服务在 ${st.api} 上正常响应`
     : st.running
@@ -130,6 +128,32 @@ function renderStatus(st) {
   $("start-btn").disabled = state.busy || Boolean(st.healthy);
   $("stop-btn").disabled = state.busy || !st.running;
   $("restart-btn").disabled = state.busy;
+
+  // 音色下拉：服务端列表优先，没有就用本地 .breeze 文件名兜底
+  const voiceSelect = $("voice-select");
+  const voices = (st.voices && st.voices.length) ? st.voices : (st.voice_files || []);
+  const currentVoice = (st.config && st.config.voice_id) || "";
+  voiceSelect.innerHTML = "";
+  const autoOpt = document.createElement("option");
+  autoOpt.value = "";
+  autoOpt.textContent = "自动（用服务端第一个音色）";
+  voiceSelect.appendChild(autoOpt);
+  voices.forEach((id) => {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    voiceSelect.appendChild(opt);
+  });
+  if (currentVoice && !voices.includes(currentVoice)) {
+    const opt = document.createElement("option");
+    opt.value = currentVoice;
+    opt.textContent = `${currentVoice}（服务端未加载）`;
+    voiceSelect.appendChild(opt);
+  }
+  if (document.activeElement !== voiceSelect) {
+    voiceSelect.value = currentVoice;
+  }
+  voiceSelect.disabled = state.busy || !st.healthy;
 
   syncViz(st);
 
@@ -200,6 +224,21 @@ $("restart-btn").addEventListener("click", () =>
     toast(res.message || "已发出重启请求");
   })
 );
+
+$("voice-select").addEventListener("change", async (e) => {
+  const value = e.target.value;
+  e.target.disabled = true;
+  try {
+    const res = await apiPost("voice", { voice_id: value });
+    toast(res.message || (res.ok ? "音色已切换" : "切换失败"));
+    await refresh();
+  } catch (err) {
+    toast(`出错了：${err.message || err}`);
+    await refresh();
+  } finally {
+    e.target.disabled = false;
+  }
+});
 
 // 折叠卡片被手动展开时，若服务在线则补加载
 $("viz-card").addEventListener("toggle", () => {
