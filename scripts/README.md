@@ -5,7 +5,7 @@
 
 ```bat
 :: 把路径换成你自己的模型目录（放着 .gguf 和 breeze-server.exe 的那层）
-start-breeze.cmd "H:\Breeze-TTS-2.cpp"
+start-breeze.cmd "D:\Breeze-TTS-2.cpp"
 ```
 
 也可以不带参数、把它复制到模型目录里用（老办法仍然有效）。

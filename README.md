@@ -102,7 +102,7 @@ AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面 **「服务
 
 ```bat
 :: 路径换成你的模型目录
-start-breeze.cmd "H:\Breeze-TTS-2.cpp"
+start-breeze.cmd "D:\Breeze-TTS-2.cpp"
 ```
 
 脚本会在这个目录里找：
