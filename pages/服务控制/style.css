@@ -29,6 +29,30 @@ body {
   font-size: 14px;
 }
 
+/* 预留的滚动条槽换成页面同色系，不再是一条突兀的亮条 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) var(--bg);
+}
+
+html::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+html::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background: #3a4761;
+}
+
 .shell {
   max-width: 960px;
   margin: 0 auto;
