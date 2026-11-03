@@ -182,8 +182,6 @@ main {
   margin-top: 14px;
 }
 
-input[type="text"],
-input[type="number"],
 select {
   background: var(--card-2);
   border: 1px solid var(--line);
@@ -194,30 +192,14 @@ select {
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s ease;
+  max-width: 100%;
 }
 
-input[type="text"] {
-  flex: 1 1 420px;
-  min-width: 240px;
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 13px;
-}
-
-input:focus,
 select:focus {
   border-color: var(--brand);
 }
 
-input[type="number"] {
-  width: 92px;
-}
-
-select {
-  max-width: 100%;
-}
-
-button,
-.link {
+button {
   border: 1px solid var(--line);
   background: var(--card-2);
   color: var(--text);
@@ -229,8 +211,7 @@ button,
   transition: filter 0.15s ease, transform 0.05s ease, opacity 0.15s ease;
 }
 
-button:hover:not(:disabled),
-.link:hover {
+button:hover:not(:disabled) {
   filter: brightness(1.15);
 }
 
@@ -260,16 +241,6 @@ button.ghost {
   background: transparent;
 }
 
-.link {
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-}
-
-.link.hidden {
-  display: none;
-}
-
 .field {
   display: flex;
   flex-direction: column;
@@ -280,10 +251,6 @@ button.ghost {
 .field > span {
   color: var(--muted);
   font-size: 12.5px;
-}
-
-.field.small {
-  flex: 0 0 auto;
 }
 
 .facts {
@@ -323,164 +290,78 @@ button.ghost {
   line-height: 1.6;
 }
 
-.toggle-row {
+/* ---------------------------------------------------- 模型可视化（折叠卡片） */
+
+details.viz {
+  padding: 0;
+  overflow: hidden;
+}
+
+details.viz > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  background: var(--card-2);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 11px 14px;
-  margin-bottom: 14px;
-  cursor: pointer;
+  gap: 10px;
+  user-select: none;
 }
 
-.toggle-text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+details.viz > summary::-webkit-details-marker {
+  display: none;
 }
 
-.toggle-text strong {
-  font-size: 13.5px;
+details.viz > summary::before {
+  content: "▸";
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+
+details.viz[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.viz-title {
+  font-size: 15px;
   font-weight: 600;
 }
 
-.switch {
-  appearance: none;
-  -webkit-appearance: none;
-  flex: 0 0 46px;
-  width: 46px;
-  height: 26px;
-  border-radius: 999px;
-  background: #39445c;
+details.viz > summary:hover {
+  filter: brightness(1.1);
+}
+
+.viz-body {
+  padding: 0 18px 18px;
+}
+
+.viz-empty {
+  margin: 0 0 12px;
+  line-height: 1.6;
+}
+
+.viz-frame {
+  width: 100%;
+  height: 560px;
   border: 1px solid var(--line);
-  position: relative;
-  cursor: pointer;
-  transition: background 0.18s ease;
-  outline: none;
-}
-
-.switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #cfd9ee;
-  transition: transform 0.18s ease;
-}
-
-.switch:checked {
-  background: linear-gradient(135deg, #5c96f7, #7f6df2);
-  border-color: transparent;
-}
-
-.switch:checked::after {
-  transform: translateX(20px);
-  background: #fff;
-}
-
-.switch:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-
-.tip code {
-  background: var(--card-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 1px 6px;
-  font-size: 12px;
-}
-
-.sub {
-  margin-top: 16px;
-  border-top: 1px dashed var(--line);
-  padding-top: 14px;
-}
-
-.sub h3 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.candidates,
-.checks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.candidates li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.linkish {
-  border: none;
-  background: none;
-  color: var(--brand);
-  padding: 0;
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 12.5px;
-  text-align: left;
-  word-break: break-all;
-}
-
-.checks li {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.checks li strong {
-  flex: 0 0 88px;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.checks li.ok strong::after {
-  content: " ✓";
-  color: var(--ok);
-}
-
-.checks li.bad strong::after {
-  content: " ✕";
-  color: var(--bad);
-}
-
-.checks li span {
-  word-break: break-all;
-  color: var(--text);
-}
-
-.log {
-  margin: 0;
-  max-height: 260px;
-  overflow: auto;
+  border-radius: 12px;
   background: #0b0f19;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 12px 14px;
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.65;
-  color: #b8c6e4;
-  white-space: pre-wrap;
-  word-break: break-all;
+  display: block;
+}
+
+.viz-open {
+  margin: 10px 0 0;
+  text-align: right;
+}
+
+.viz-open a {
+  color: var(--brand);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.viz-open a:hover {
+  text-decoration: underline;
 }
 
 body.busy {
@@ -517,5 +398,9 @@ body.busy button {
 
   .facts {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .viz-frame {
+    height: 420px;
   }
 }
