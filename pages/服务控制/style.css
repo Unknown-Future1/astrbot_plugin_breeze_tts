@@ -30,12 +30,6 @@ body {
   max-width: 960px;
   margin: 0 auto;
   padding: 20px 18px 48px;
-  transition: max-width 0.18s ease;
-}
-
-/* 打开模型可视化时放宽页面，让内嵌的宽屏网页有地方展开 */
-body.viz-open .shell {
-  max-width: 1180px;
 }
 
 .topbar {
@@ -348,9 +342,7 @@ details.viz > summary:hover {
 
 .viz-frame {
   width: 100%;
-  /* 兜底高度：等 JS 量出实际可用空间后会覆盖成精确值 */
-  height: min(980px, calc(100vh - 200px));
-  min-height: 520px;
+  height: 560px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #0b0f19;
@@ -409,7 +401,6 @@ body.busy button {
   }
 
   .viz-frame {
-    height: calc(100vh - 160px);
-    min-height: 400px;
+    height: 420px;
   }
 }
