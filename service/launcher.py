@@ -415,7 +415,11 @@ class ServiceManager:
 
     @property
     def root(self) -> Path | None:
-        return _norm(self.model_dir)
+        path = _norm(self.model_dir)
+        # 用户常把 .gguf 文件路径整条粘进来：自动退回它所在的文件夹
+        if path is not None and path.suffix.lower() == GGUF_SUFFIX:
+            return path.parent
+        return path
 
     def exe(self) -> Path | None:
         return find_exe(self.root)

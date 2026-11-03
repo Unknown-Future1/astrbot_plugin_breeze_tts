@@ -5,9 +5,8 @@
   2. 409 并发退避重试
   3. 健康探活
 
-另外负责两处「自动识别」，避免把作者本机的配置写死给所有人：
-  · 服务地址：没填就探测默认端口 9000
-  · 音色    ：没填就用服务端已保存的第一个音色
+服务地址由插件配置的「服务端口」推导（127.0.0.1:端口）；
+用户没填 voice_id 时自动用服务端第一个音色。
 
 语速/音调的后处理在 utils/audio_ops.py 里（纯 numpy 实现）。
 """
@@ -23,10 +22,8 @@ from astrbot.api import logger
 
 from ..utils import audio_ops
 
-# 本机常见端口（9001 是 Breeze 的 WebSocket 端口，故意跳过）
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
-CANDIDATE_PORTS = (DEFAULT_PORT,)
 
 
 class BreezeTTSClient:
@@ -66,21 +63,6 @@ class BreezeTTSClient:
         return await self._health_at(self.base, timeout)
 
     # ------------------------------------------------------------ 自动识别
-    async def probe(self, host: str = DEFAULT_HOST,
-                    ports: tuple[int, ...] = CANDIDATE_PORTS) -> str | None:
-        """
-        探测默认端口（9000），返回能响应的服务地址。
-
-        用于「用户没填 breeze_api」的情况 —— 装上插件就能用，不用去翻端口号。
-        """
-        for port in ports:
-            base = f"http://{host}:{port}"
-            if await self._health_at(base):
-                self.api_base = base
-                logger.info(f"[BreezeTTS] 自动探测到服务：{base}")
-                return base
-        return None
-
     async def detect_voice(self) -> str | None:
         """
         返回服务端已保存的第一个音色（没有则 None）。

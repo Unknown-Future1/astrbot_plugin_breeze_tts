@@ -18,6 +18,7 @@ import asyncio
 import os
 import random
 import re
+import urllib.parse
 
 from pydantic import Field
 from pydantic.dataclasses import dataclass
@@ -196,6 +197,9 @@ class BreezeTTSPlugin(Star):
 
     async def initialize(self):
         """插件启用时：按配置的端口检查服务，并识别音色"""
+        # ---- 老配置迁移（必须在连通性检查之前）----
+        self._migrate_legacy_api()
+
         # ---- ① 服务连通性：直接连「服务端口」，不再四处探测 ----
         ok = await self.client.health()
         if not ok:
@@ -213,6 +217,40 @@ class BreezeTTSPlugin(Star):
         await self._refresh_voice()
 
         logger.info(f"[BreezeTTS] 已启用，服务在线：{self.breeze_api}，音色：{self.voice_id or '（未识别）'}")
+
+    def _migrate_legacy_api(self) -> None:
+        """老配置迁移：早期版本只有一个「Breeze 服务地址」（breeze_api）。
+
+        如果用户当初填的是本机地址，把端口沿用过来写进 service_port。
+        这样即使以后在设置面板保存（表单只提交 schema 里的字段，旧键会被丢掉），
+        也不会把服务端口弄回默认 9000 导致连不上。
+        """
+        legacy = str(self._cfg("breeze_api", "") or "").strip()
+        if not legacy or "service_port" in self.config:
+            return
+        try:
+            parsed = urllib.parse.urlsplit(legacy if "://" in legacy else f"http://{legacy}")
+        except ValueError:
+            return
+        host = (parsed.hostname or "").lower()
+        if host not in ("127.0.0.1", "localhost", "::1", "0.0.0.0"):
+            return  # 远程地址没法用「本机端口」表示，保持原样（继续按地址连）
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        if not 1 <= int(port) <= 65535:
+            return
+        merged = dict(self.config)
+        merged["service_port"] = int(port)
+        merged["breeze_api"] = ""
+        try:
+            self.config.save_config(merged)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"[BreezeTTS] 老配置迁移写盘失败（不影响本次运行）：{exc}")
+            return
+        self.service_port = int(port)
+        self.service.port = int(port)
+        self.breeze_api = f"http://127.0.0.1:{int(port)}"
+        self.client.api_base = self.breeze_api
+        logger.info(f"[BreezeTTS] 已把老配置里的服务地址迁移成端口 {port}")
 
     async def _refresh_voice(self) -> list[str]:
         """刷新服务端音色列表，顺便补齐没填的 voice_id。"""
