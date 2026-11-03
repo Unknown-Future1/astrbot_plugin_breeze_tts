@@ -22,7 +22,6 @@ EDITABLE_CONFIG = [
     ("model_dir", "模型目录"),
     ("model_file", "模型文件"),
     ("service_port", "服务端口"),
-    ("service_parallel", "并发槽位"),
     ("auto_start_service", "启动时自动拉起服务"),
 ]
 
@@ -131,8 +130,6 @@ def register_web_apis(plugin) -> None:
             merged["model_file"] = str(changes["model_file"] or "").strip()
         if "service_port" in changes:
             merged["service_port"] = _as_int(changes["service_port"], 9000, 1, 65535)
-        if "service_parallel" in changes:
-            merged["service_parallel"] = _as_int(changes["service_parallel"], 4, 1, 16)
         if "auto_start_service" in changes:
             merged["auto_start_service"] = _as_bool(changes["auto_start_service"])
 

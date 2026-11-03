@@ -152,6 +152,7 @@ class BreezeTTSPlugin(Star):
         # ---- 本地服务（模型目录 / 起停控制）----
         self.model_dir = str(cfg.get("model_dir") or "").strip()
         self.model_file = str(cfg.get("model_file") or "").strip()
+        # 并发槽位不再是设置项：默认 4（老配置里手填过的值仍然尊重）
         self.service_parallel = _as_int(cfg.get("service_parallel", 4), 4, 1, 16)
         self.auto_start_service = _as_bool(cfg.get("auto_start_service", True), True)
         self._auto_start_task = None

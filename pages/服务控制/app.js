@@ -102,10 +102,6 @@ function renderStatus(st) {
     select.value = models.some((m) => m.name === current) ? current : wanted;
   }
 
-  if (document.activeElement !== $("parallel-input")) {
-    $("parallel-input").value = st.parallel || 4;
-  }
-
   const autoToggle = $("auto-toggle");
   if (document.activeElement !== autoToggle) {
     autoToggle.checked = Boolean(st.config && st.config.auto_start_service);
@@ -181,7 +177,6 @@ $("save-btn").addEventListener("click", () =>
     const changes = {
       model_dir: $("dir-input").value.trim(),
       model_file: selectedModel(),
-      service_parallel: Number($("parallel-input").value) || 4,
     };
     const res = await apiPost("config", { changes });
     state.dirty = false;
