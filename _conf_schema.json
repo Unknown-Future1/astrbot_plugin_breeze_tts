@@ -111,5 +111,17 @@
     "type": "bool",
     "default": false,
     "hint": "关闭（默认）= 群里只看到语音气泡；开启 = 文字和语音都发。"
+  },
+  "enable_tts_command": {
+    "description": "启用 /tts 指令",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后可以用「/tts 要念的内容」手工让机器人念一段话，不受触发概率影响。"
+  },
+  "fail_reply_text": {
+    "description": "合成失败时的提示",
+    "type": "string",
+    "default": "（嗓子哑了…稍后再试）",
+    "hint": "语音合成失败（服务没开、并发打满 409 等）时补发的一句提示；留空则只发原文字，不提示。"
   }
 }

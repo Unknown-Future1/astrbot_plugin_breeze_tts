@@ -12,6 +12,7 @@ astrbot_plugin_breeze_tts —— 用本地 Breeze TTS 2 模型把文字回复转
 
 from __future__ import annotations
 
+import os
 import random
 import re
 
@@ -27,6 +28,7 @@ from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
 from astrbot.core.config import AstrBotConfig
 from astrbot.core.provider.entities import LLMResponse
+from astrbot.core.star.filter.command import GreedyStr
 
 from .tts_api.breeze_api import BreezeTTSClient
 from .utils import audio_ops
@@ -75,11 +77,30 @@ def _as_bool(value, default: bool) -> bool:
     return default
 
 
+def _plugin_meta(fallback_version: str = "0.0.0", fallback_desc: str = "") -> tuple[str, str]:
+    """从同目录 metadata.yaml 读 (desc, version)，避免和 @register 里写的不一致。"""
+    desc, version = fallback_desc, fallback_version
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metadata.yaml")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith("desc:") and len(line) > 5:
+                    desc = line.split(":", 1)[1].strip().strip("\"'")
+                elif line.startswith("version:") and len(line) > 8:
+                    version = line.split(":", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    return desc, version
+
+
+_META_DESC, _META_VERSION = _plugin_meta()
+
 @register(
     "astrbot_plugin_breeze_tts",
     "未知の未来",
-    "使用本地部署Breeze TTS克隆的自定义音色，无需任何 API Key。让你的大肥鱼能进行语音回复，支持语音触发概率、语速与音调等功能调节。插件头像dsh画的hhh",
-    "1.0.0",
+    _META_DESC,
+    _META_VERSION,
 )
 class BreezeTTSPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -114,6 +135,10 @@ class BreezeTTSPlugin(Star):
         # ---- LLM 工具与文字抑制 ----
         self.enable_tts_tool_minmax = _as_bool(cfg.get("enable_tts_tool_minmax", True), True)
         self.enable_llm_response = _as_bool(cfg.get("enable_llm_response", False), False)
+
+        # ---- /tts 指令与失败兜底 ----
+        self.enable_tts_command = _as_bool(cfg.get("enable_tts_command", True), True)
+        self.fail_reply_text = str(cfg.get("fail_reply_text") or "").strip()
 
         # ---- 客户端 ----
         self.client = BreezeTTSClient(
@@ -304,8 +329,15 @@ class BreezeTTSPlugin(Star):
             logger.info(f"[BreezeTTS] 开始合成：{text[:30]}")
             audio_b64 = await self.synthesize(event, text)
             if not audio_b64:
-                # 与原插件一致：只记日志，文本照发
-                logger.warning("[BreezeTTS] 语音合成返回空数据，跳过本次语音回复")
+                # 合成失败：文字照发，并按配置补一句提示（比如"嗓子哑了"）
+                logger.warning("[BreezeTTS] 语音合成失败，本次只发文字")
+                if self.fail_reply_text:
+                    try:
+                        res = event.get_result()
+                        if res is not None and res.chain:
+                            res.chain.append(Comp.Plain(f"\n{self.fail_reply_text}"))
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug(f"[BreezeTTS] 追加失败提示出错：{exc}")
                 return
 
             result2 = event.get_result()
@@ -324,6 +356,37 @@ class BreezeTTSPlugin(Star):
 
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[BreezeTTS] on_decorating_result 异常：{exc}")
+
+    # ------------------------------------------------------------ /tts 指令
+    @filter.command("tts")
+    async def cmd_tts(self, event: AstrMessageEvent, text: GreedyStr):
+        """把一段文字念成语音：/tts 你好呀"""
+        if not self.enable_tts_command:
+            return
+
+        content = str(text or "").strip()
+        if not content:
+            yield event.plain_result("用法：/tts 要念的内容")
+            return
+
+        if self.hit_blocked(content):
+            yield event.plain_result("这句话里有不适合朗读的内容，换个说法吧")
+            return
+
+        if len(content) > self.max_length:
+            yield event.plain_result(
+                f"太长了（{len(content)} 字），单次最多 {self.max_length} 字"
+            )
+            return
+
+        logger.info(f"[BreezeTTS] /tts 手工合成：{content[:30]}")
+        audio_b64 = await self.synthesize(event, content)
+        if not audio_b64:
+            logger.warning("[BreezeTTS] /tts 合成失败")
+            yield event.plain_result(self.fail_reply_text or "（刚刚嗓子有点干,没说出话…稍后再试）")
+            return
+
+        yield event.chain_result([Comp.Record.fromBase64(audio_b64)])
 
     # ------------------------------------------------ 钩子：抹掉重复的文字
     @filter.on_llm_response()
@@ -397,7 +460,7 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
             cfg_scale=cfg,
         )
         if not wav:
-            return "语音合成失败"
+            return self.plugin.fail_reply_text or "语音合成失败"
 
         # chain_result() 是同步方法，返回 MessageEventResult；发送要交给 event.send()
         ev = context.context.event
