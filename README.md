@@ -61,7 +61,7 @@
 ## 📋 前置要求
 
 1. **AstrBot** ≥ v4.29.3 已安装并正常运行
-2. **本地 Breeze TTS 2 服务**已部署并运行（端口 9000，插件会自动探测）
+2. **本地 Breeze TTS 2 服务**已部署并运行（默认连 `127.0.0.1:9000`，端口可在设置里改）
 3. **至少一个已保存的音色**（服务端 `voices` 目录里存在）
 4. **无需外部程序** —— 语速/音调用内置的 numpy 实现（AstrBot 自带 numpy），装上就能用
 
@@ -176,7 +176,6 @@ start-breeze.cmd "H:\Breeze-TTS-2.cpp"
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `breeze_api` | `string` | `""` | 服务地址。**留空自动探测** 9000（9001 是 WebSocket 口，别填） |
 | `cfg_scale` | `float` | `2.0` | 引导强度 1.0~4.0，**只在有语气指令时生效** |
 | `seed` | `int` | `42` | 随机种子，固定则同文本生成同音频 |
 | `timeout` | `int` | `30` | 单次请求超时（秒） |
@@ -195,7 +194,7 @@ start-breeze.cmd "H:\Breeze-TTS-2.cpp"
 | --- | --- | --- | --- |
 | `model_dir` | `string` | `""` | 模型目录：放着 `*.gguf` 和 `breeze-server.exe` 的那层。到「服务控制」页「浏览…」选一次即可 |
 | `model_file` | `string` | `""` | 留空=自动用唯一的 `*.gguf`；目录里有多个量化版本时填文件名指定 |
-| `service_port` | `int` | `9000` | 一键启动时传给 `--port`，要和 `breeze_api` 一致（9001 是 WebSocket 口） |
+| `service_port` | `int` | `9000` | **服务端口**：连接（`127.0.0.1:端口`）、一键启动、探测都用它；9001 是 WebSocket 口，别填 |
 | `service_parallel` | `int` | `4` | 传给 `--parallel`，显存紧张就改 2 |
 | `auto_start_service` | `bool` | `false` | 打开后 AstrBot 启动时若探测不到服务，自动按上面的目录拉起（后台窗口） |
 

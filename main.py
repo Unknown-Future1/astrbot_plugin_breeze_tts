@@ -121,8 +121,11 @@ class BreezeTTSPlugin(Star):
         self.blocked_words = [str(w) for w in (cfg.get("blocked_words") or []) if str(w).strip()]
 
         # ---- 服务与音色 ----
-        # 两者都可以留空：留空时在 initialize() 里自动识别（探测端口 / 取第一个音色）
-        self.breeze_api = str(cfg.get("breeze_api") or "").strip()
+        # 服务地址只由「服务端口」决定（127.0.0.1:端口），连接/启动/探测共用；
+        # 兼容老配置：以前手填过完整地址（breeze_api）的话仍优先用它
+        self.service_port = _as_int(cfg.get("service_port", 9000), 9000, 1, 65535)
+        legacy_api = str(cfg.get("breeze_api") or "").strip()
+        self.breeze_api = legacy_api or f"http://127.0.0.1:{self.service_port}"
         self.voice_id = str(cfg.get("voice_id") or "").strip()
         self.cfg_scale = _as_float(cfg.get("cfg_scale", 2.0), 2.0, 1.0, 4.0)
         self.seed = _as_int(cfg.get("seed", 42), 42, 0, 2**31 - 1)
@@ -149,7 +152,6 @@ class BreezeTTSPlugin(Star):
         # ---- 本地服务（模型目录 / 起停控制）----
         self.model_dir = str(cfg.get("model_dir") or "").strip()
         self.model_file = str(cfg.get("model_file") or "").strip()
-        self.service_port = _as_int(cfg.get("service_port", 9000), 9000, 1, 65535)
         self.service_parallel = _as_int(cfg.get("service_parallel", 4), 4, 1, 16)
         self.auto_start_service = _as_bool(cfg.get("auto_start_service", False), False)
         self.service = ServiceManager(
@@ -191,20 +193,14 @@ class BreezeTTSPlugin(Star):
         return default if value is None else value
 
     async def initialize(self):
-        """插件启用时：自动识别服务地址与音色，然后做一次连通性自检"""
-        # ---- ① 服务地址：没填就自动探测（先看配的端口，再看默认 9000）----
-        if not self.breeze_api:
-            ports = tuple(dict.fromkeys((self.service_port, 9000)))
-            found = await self.client.probe(ports=ports)
-            if found:
-                self.breeze_api = found
-
-        ok = await self.client.health() if self.breeze_api else False
+        """插件启用时：按配置的端口检查服务，并识别音色"""
+        # ---- ① 服务连通性：直接连「服务端口」，不再四处探测 ----
+        ok = await self.client.health()
         if not ok:
             logger.warning(
-                f"[BreezeTTS] 已启用，但连不上服务 {self.breeze_api or ''}"
-                "（到「服务控制」页点一下启动，或自己跑 start-breeze.cmd）；"
-                "语音会静默跳过，文本回复不受影响"
+                f"[BreezeTTS] 已启用，但连不上服务 {self.breeze_api}"
+                "（确认服务确实跑在这个端口，可在「服务端口」里改；"
+                "或到「服务控制」页点一下启动）；语音会静默跳过，文本回复不受影响"
             )
             if self.auto_start_service:
                 asyncio.create_task(self._auto_start_service())
@@ -257,9 +253,8 @@ class BreezeTTSPlugin(Star):
             logger.warning(f"[BreezeTTS] 自动启动失败：{result.get('message')}")
             return
         logger.info(f"[BreezeTTS] {result.get('message')}")
-        if not self.breeze_api:
-            self.breeze_api = f"http://127.0.0.1:{self.service_port}"
-            self.client.api_base = self.breeze_api
+        self.breeze_api = f"http://127.0.0.1:{self.service_port}"
+        self.client.api_base = self.breeze_api
         await self._refresh_voice()
 
     async def terminate(self):
@@ -472,9 +467,8 @@ class BreezeTTSPlugin(Star):
             result = await loop.run_in_executor(None, self.service.start)
             yield event.plain_result(str(result.get("message") or "没有输出"))
             if result.get("ok"):
-                if not self.breeze_api:
-                    self.breeze_api = f"http://127.0.0.1:{self.service_port}"
-                    self.client.api_base = self.breeze_api
+                self.breeze_api = f"http://127.0.0.1:{self.service_port}"
+                self.client.api_base = self.breeze_api
                 await self._refresh_voice()
             return
 
