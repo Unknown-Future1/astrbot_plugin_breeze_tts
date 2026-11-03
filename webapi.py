@@ -36,13 +36,8 @@ def register_web_apis(plugin) -> None:
     # ------------------------------------------------------------- 状态
     async def status():
         payload = await _run(manager().status)
-        payload["config"] = {
-            "model_dir": plugin.model_dir,
-            "model_file": plugin.model_file,
-            "service_port": plugin.service_port,
-            "auto_start_service": bool(plugin.auto_start_service),
-            "voice_id": getattr(plugin, "voice_id", ""),
-        }
+        # 页面只额外需要「当前音色」；端口/模型/目录在 status() 里已经有了，不再重复回
+        payload["config"] = {"voice_id": getattr(plugin, "voice_id", "")}
         return jsonify(payload)
 
     # ------------------------------------------------------------- 启动/停止
