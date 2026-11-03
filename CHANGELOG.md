@@ -3,6 +3,16 @@
 本文件记录插件的重要变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.1] - 2026-11-03
+
+### 变更
+
+- **移除仓库内的 `docs/` 配图**（6 张，1.14 MB）
+  - README 里的图片地址本来就固定在提交 `55f345f`，由 jsDelivr 提供，
+    不依赖当前 HEAD 是否还带着这些文件
+  - 插件包体：**1.47 MB → 0.33 MB**（AstrBot Cloud 打包按 HEAD 计算）
+  - 换图时需重新把文件加回仓库、推送后再更新 README 里的提交号
+
 ## [1.2.0] - 2026-11-02
 
 ### 新增
