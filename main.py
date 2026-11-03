@@ -252,7 +252,7 @@ class BreezeTTSPlugin(Star):
 
     async def terminate(self):
         # 注意：插件停用/重载时故意不结束本地服务，避免「改个配置服务就断了」。
-        # 需要停服务请用「服务控制」页的按钮或 /breeze stop。
+        # 需要停服务请用「服务控制」页的按钮。
         logger.info("[BreezeTTS] 插件已停用/卸载（本地服务保持运行，可在服务控制页手动停止）")
 
     # ------------------------------------------------------------------ 工具
@@ -438,79 +438,6 @@ class BreezeTTSPlugin(Star):
             return
 
         yield event.chain_result([Comp.Record.fromBase64(audio_b64)])
-
-    # ------------------------------------------- 本地服务开关（仅管理员）
-    @filter.command("breeze")
-    async def cmd_breeze(self, event: AstrMessageEvent, action: GreedyStr):
-        """本地模型服务开关：/breeze status | start | stop | restart"""
-        if not event.is_admin():
-            yield event.plain_result("只有管理员能操作本地服务")
-            return
-
-        cmd = str(action or "").strip().lower()
-        loop = asyncio.get_running_loop()
-
-        if cmd in ("", "status", "状态"):
-            state = await loop.run_in_executor(None, self.service.status)
-            yield event.plain_result(self._format_status(state))
-            return
-
-        if cmd in ("start", "启动", "开"):
-            yield event.plain_result("正在启动本地模型…（首次加载约 5~10 秒）")
-            result = await loop.run_in_executor(None, self.service.start)
-            yield event.plain_result(str(result.get("message") or "没有输出"))
-            if result.get("ok"):
-                self.breeze_api = f"http://127.0.0.1:{self.service_port}"
-                self.client.api_base = self.breeze_api
-                await self._refresh_voice()
-            return
-
-        if cmd in ("stop", "停止", "关"):
-            result = await loop.run_in_executor(None, self.service.stop)
-            yield event.plain_result(str(result.get("message") or "没有输出"))
-            return
-
-        if cmd in ("restart", "重启"):
-            yield event.plain_result("正在重启本地模型…")
-            result = await loop.run_in_executor(None, self.service.restart)
-            yield event.plain_result(str(result.get("message") or "没有输出"))
-            return
-
-        yield event.plain_result(
-            "用法：/breeze status 看状态；/breeze start 启动；"
-            "/breeze stop 停止；/breeze restart 重启"
-        )
-
-    @staticmethod
-    def _format_status(state: dict) -> str:
-        healthy = bool(state.get("healthy"))
-        running = bool(state.get("running"))
-        if healthy:
-            head = "在线"
-        elif running:
-            head = "进程在，但 /health 没响应"
-        else:
-            head = "离线"
-        lines = [
-            "【Breeze TTS 本地服务】",
-            f"状态：{head}",
-            f"端口：{state.get('port')}（PID {state.get('pid') or '—'}）",
-        ]
-        if state.get("model_name"):
-            lines.append(f"模型：{state['model_name']}（{state.get('model_size') or '?'}）")
-        else:
-            lines.append("模型：没找到 .gguf")
-        voices = state.get("voices") or []
-        if voices:
-            shown = ", ".join(voices[:6]) + ("…" if len(voices) > 6 else "")
-            lines.append(f"音色：{len(voices)} 个 → {shown}")
-        if state.get("model_dir"):
-            lines.append(f"目录：{state['model_dir']}")
-        else:
-            lines.append("目录：还没设置（去「服务控制」页选一个）")
-        if not state.get("exe"):
-            lines.append("⚠ 目录里没找到 breeze-server.exe")
-        return "\n".join(lines)
 
     # ------------------------------------------------ 钩子：抹掉重复的文字
     @filter.on_llm_response()
