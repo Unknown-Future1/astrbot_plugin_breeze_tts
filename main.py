@@ -154,6 +154,7 @@ class BreezeTTSPlugin(Star):
         self.model_file = str(cfg.get("model_file") or "").strip()
         self.service_parallel = _as_int(cfg.get("service_parallel", 4), 4, 1, 16)
         self.auto_start_service = _as_bool(cfg.get("auto_start_service", False), False)
+        self._auto_start_task = None
         self.service = ServiceManager(
             plugin_dir=os.path.dirname(os.path.abspath(__file__)),
             model_dir=self.model_dir,
@@ -203,7 +204,8 @@ class BreezeTTSPlugin(Star):
                 "或到「服务控制」页点一下启动）；语音会静默跳过，文本回复不受影响"
             )
             if self.auto_start_service:
-                asyncio.create_task(self._auto_start_service())
+                # 保留引用，防止任务被垃圾回收（asyncio 只持弱引用）
+                self._auto_start_task = asyncio.create_task(self._auto_start_service())
             return
 
         # ---- ② 音色：没填就用服务端第一个 ----

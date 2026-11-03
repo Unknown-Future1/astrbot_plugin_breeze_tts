@@ -442,10 +442,14 @@ class ServiceManager:
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
+    # 健康检查必须直连本机：Windows 上 urllib 会自动读系统代理（注册表），
+    # 用户开着 Clash 等代理时，探测 127.0.0.1 会被代理劫持导致全部超时
+    _DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
     def _get_json(self, path: str, timeout: float = 2.0):
         url = f"{self.base_url}{path}"
         try:
-            with urllib.request.urlopen(url, timeout=timeout) as resp:
+            with self._DIRECT_OPENER.open(url, timeout=timeout) as resp:
                 raw = resp.read().decode("utf-8", "replace")
             return True, json.loads(raw or "{}")
         except (urllib.error.URLError, OSError, ValueError, TimeoutError):
