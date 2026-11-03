@@ -20,8 +20,6 @@ import json
 import os
 import re
 import subprocess
-import sys
-import threading
 import time
 import urllib.error
 import urllib.request
@@ -42,7 +40,7 @@ DEFAULT_PARALLEL = 4
 
 # 找 exe / 模型时最多往下钻几层（够覆盖 "版本子目录" 这种布局）
 _SEARCH_DEPTH = 2
-# 自动探测时不该扫的目录
+# 找 exe/模型时跳过的目录（系统目录、缓存等）
 _SKIP_NAMES = {
     "$recycle.bin",
     "system volume information",
@@ -58,8 +56,6 @@ _SKIP_NAMES = {
 }
 
 _EXE_HINTS = re.compile(r"breeze", re.I)
-
-_pick_lock = threading.Lock()
 
 
 # --------------------------------------------------------------------- 小工具
@@ -324,33 +320,6 @@ def _has_breeze(folder: Path) -> bool:
         return any(folder.glob("*.breeze"))
     except OSError:
         return False
-
-
-def pick_directory(initial: str = "") -> tuple[str, str]:
-    """本机弹出原生目录选择框，返回 (路径, 错误)。必须在线程里调用。"""
-    if not _pick_lock.acquire(blocking=False):
-        return "", "已经有一个选择框在等待操作了，请先处理它"
-    try:
-        import tkinter  # noqa: PLC0415  延迟导入：无图形环境时更友好
-        from tkinter import filedialog  # noqa: PLC0415
-
-        root = tkinter.Tk()
-        root.withdraw()
-        try:
-            root.attributes("-topmost", True)
-        except tkinter.TclError:
-            pass
-        kwargs = {"title": "选择 Breeze TTS 2 所在目录（含 breeze-server.exe）"}
-        start = _clean_path(initial)
-        if start and _isdir(start):
-            kwargs["initialdir"] = start
-        chosen = filedialog.askdirectory(**kwargs)
-        root.destroy()
-        return (str(chosen or ""), "")
-    except Exception as exc:  # noqa: BLE001  无 tkinter / 无桌面
-        return "", f"打不开选择框（{type(exc).__name__}: {exc}），请直接把路径粘进输入框"
-    finally:
-        _pick_lock.release()
 
 
 def _human_size(num: int) -> str:
@@ -637,55 +606,6 @@ class ServiceManager:
             "log_file": str(self.log_file),
         }
 
-    def validate(self) -> dict:
-        """设置页「检查」按钮：逐条报告目录里能不能用。"""
-        root = self.root
-        exe = self.exe()
-        models = self.models()
-        voices_dir = self.voices_dir()
-        checks = []
-
-        def add(name: str, ok: bool, detail: str) -> None:
-            checks.append({"name": name, "ok": bool(ok), "detail": detail})
-
-        add("目录存在", _isdir(root), str(root) if root else "还没填目录")
-        add(
-            "服务程序",
-            bool(exe),
-            str(exe) if exe else f"没找到 {EXE_NAME}（会在目录下两层内搜索）",
-        )
-        add(
-            "模型文件",
-            bool(models),
-            models[0].name + (f" 等 {len(models)} 个" if len(models) > 1 else "")
-            if models
-            else "没找到 *.gguf",
-        )
-        if voices_dir:
-            count = 0
-            if _isdir(voices_dir):
-                try:
-                    count = len(list(voices_dir.glob("*.breeze")))
-                except OSError:
-                    count = 0
-            add("音色目录", True, f"{voices_dir}（{count} 个音色）")
-        else:
-            add("音色目录", False, "目录没填，无法推断")
-
-        owner = self.port_owner()
-        if owner:
-            image = _pid_image(owner)
-            mine = _EXE_HINTS.search(Path(image).name or "")
-            add(
-                f"端口 {self.port}",
-                True,
-                f"被 PID {owner} 占用（{Path(image).name or '未知进程'}）"
-                + ("" if mine else "，不是 breeze-server"),
-            )
-        else:
-            add(f"端口 {self.port}", True, "空闲")
-        return {"ok": all(c["ok"] for c in checks), "checks": checks}
-
     # ------------------------------------------------------------ 启动/停止
     def _open_log(self):
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -906,116 +826,3 @@ class ServiceManager:
             return []
         rows = [row.rstrip() for row in raw.splitlines() if row.strip()]
         return rows[-max(1, min(500, lines)):]
-
-    # ----------------------------------------------------------- 自动探测
-    def detect_roots(self, budget: float = 8.0) -> list[dict]:
-        """扫一批常见位置，找含 breeze-server.exe 的目录。"""
-        deadline = time.monotonic() + max(1.0, budget)
-        seen: set[str] = set()
-        hits: list[dict] = []
-
-        def consider(path: Path | None) -> None:
-            if path is None or time.monotonic() > deadline:
-                return
-            try:
-                key = str(path).lower()
-            except (TypeError, ValueError):
-                return
-            if key in seen or not _isdir(path):
-                return
-            seen.add(key)
-            found_exe = find_exe(path, max_depth=_SEARCH_DEPTH)
-            if not found_exe:
-                return
-            models = find_models(path, max_depth=_SEARCH_DEPTH)
-            hits.append(
-                {
-                    "path": str(path),
-                    "exe": str(found_exe),
-                    "models": [p.name for p in models],
-                    "score": (2 if models else 1),
-                }
-            )
-
-        consider(self.root)
-        extra = os.environ.get("BREEZE_TTS_HOME") or os.environ.get("BREEZE_HOME")
-        if extra:
-            consider(_norm(extra))
-        home = Path.home()
-        for name in ("Desktop", "Downloads", "Documents", "桌面", "下载", "文档"):
-            consider(home / name)
-        consider(home / "OneDrive" / "Desktop")
-
-        # 各盘根目录的一层子目录（名字带 breeze/tts 的优先）
-        drives = []
-        for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
-            probe = Path(f"{letter}:\\")
-            try:
-                if probe.exists():
-                    drives.append(probe)
-            except OSError:
-                continue
-        for drive in drives:
-            if time.monotonic() > deadline:
-                break
-            try:
-                children = [
-                    Path(entry.path)
-                    for entry in os.scandir(drive)
-                    if entry.is_dir() and entry.name.lower() not in _SKIP_NAMES
-                ]
-            except OSError:
-                continue
-            children.sort(key=lambda p: (0 if _EXE_HINTS.search(p.name) else 1, p.name.lower()))
-            for child in children:
-                if time.monotonic() > deadline:
-                    break
-                consider(child)
-
-        hits.sort(key=lambda item: (-item["score"], item["path"].lower()))
-        for item in hits:
-            item.pop("score", None)
-        return hits
-
-
-# --------------------------------------------------------------- 命令行测试
-
-
-def _main(argv: list[str]) -> int:
-    import argparse  # noqa: PLC0415
-
-    parser = argparse.ArgumentParser(description="Breeze TTS 本地服务管理（测试用）")
-    parser.add_argument("action", choices=["status", "start", "stop", "restart", "detect", "validate", "log"])
-    parser.add_argument("--root", default="", help="模型目录")
-    parser.add_argument("--model", default="", help="指定 gguf 文件名")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--parallel", type=int, default=DEFAULT_PARALLEL)
-    parser.add_argument("--lines", type=int, default=40)
-    args = parser.parse_args(argv)
-
-    manager = ServiceManager(
-        plugin_dir=Path(__file__).resolve().parent.parent,
-        model_dir=args.root,
-        model_file=args.model,
-        port=args.port,
-        parallel=args.parallel,
-    )
-    if args.action == "status":
-        print(json.dumps(manager.status(), ensure_ascii=False, indent=2))
-    elif args.action == "validate":
-        print(json.dumps(manager.validate(), ensure_ascii=False, indent=2))
-    elif args.action == "detect":
-        print(json.dumps(manager.detect_roots(), ensure_ascii=False, indent=2))
-    elif args.action == "log":
-        print("\n".join(manager.log_tail(args.lines)))
-    elif args.action == "start":
-        print(json.dumps(manager.start(model_hint=args.model), ensure_ascii=False, indent=2))
-    elif args.action == "stop":
-        print(json.dumps(manager.stop(), ensure_ascii=False, indent=2))
-    else:
-        print(json.dumps(manager.restart(model_hint=args.model), ensure_ascii=False, indent=2))
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(_main(sys.argv[1:]))

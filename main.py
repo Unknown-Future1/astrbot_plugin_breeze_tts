@@ -184,14 +184,6 @@ class BreezeTTSPlugin(Star):
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[BreezeTTS] 服务控制接口注册失败：{exc}")
 
-    def _cfg(self, key: str, default=""):
-        """读一条原始配置值（给设置页展示用，不做类型转换）。"""
-        try:
-            value = self.config.get(key, default)
-        except Exception:  # noqa: BLE001
-            return default
-        return default if value is None else value
-
     async def initialize(self):
         """插件启用时：按配置的端口检查服务，并识别音色"""
         # ---- ① 服务连通性：直接连「服务端口」，不再四处探测 ----
