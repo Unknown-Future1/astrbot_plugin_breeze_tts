@@ -62,15 +62,15 @@
 
 ### 部署模型与服务（一次性）
 
-#### 最省事：直接让 DSH 代劳【这里图片改为:C:\Users\Unknown_Future\Desktop\素材\屏幕截图 2026-11-03 212832.png,先加上，最后准备提交时统一改成云端照片】】
+#### 最省事：直接让 DSH 代劳
 
-![在 DSH 里让它下载项目、选量化版、配好 9000 端口](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/dsh-deploy.png)
+![在 DSH 里让它下载项目、选量化版、配好 9000 端口](docs/dsh-deploy.png)
 
 ---
 
 ## 🚀 初步设置（装完插件 5 步）
 
-1. **装插件**：AstrBot 面板 → 插件 → 安装本插件（或上传压缩包）【改成:直接在astrbot的插件市场搜索 {插件名} ，点击安装，等待完成即可】
+1. **装插件**：AstrBot 面板 → 插件市场 → 搜索「Breeze TTS 克隆语音」（或 `astrbot_plugin_breeze_tts`），点安装、等它装完
 2. **填模型目录**：插件设置里「本地模型目录」填放 `*.gguf` 的那个文件夹，例如 `D:\Breeze-TTS-2.cpp`
    - 只填文件夹即可；把 `.gguf` 文件路径整条粘进来也能识别（会自动退回所在文件夹）
    - 目录里有多个量化版本时，在「模型文件」里选一个；留空则自动取第一个
@@ -88,7 +88,7 @@
 
 ## 🖥 服务页面（服务控制）
 
-【加个页面图:C:\Users\Unknown_Future\Desktop\素材\屏幕截图 2026-11-03 212918.png,先加上，最后准备提交时统一改成云端照片】
+![服务控制页](docs/service-page.png)
 
 AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控制」。
 
@@ -107,48 +107,7 @@ AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控
 > - **模型目录、模型文件、服务端口、自动拉起**都在「插件设置」里，页面上不重复放输入框
 > - 关掉「启用插件时自动拉起服务」后，重启 AstrBot 不会再拉起模型（把显存留给别的事）
 > - 从旧版本升级：服务地址现在只由「服务端口」决定；服务不在 9000 的话，把端口重填一次即可
-
----
-
-## 🛠 用脚本启动（可选）【不是很有必要，删掉，但在这3个插件文件夹中补一个说明文档就行】
-
-| 文件 | 用途 |
-| --- | --- |
-| `start-breeze.cmd` | 双击启动服务；也接受目录参数 |
-| `start-breeze.ps1` | 实际逻辑，被上面那个调用 |
-| `stop-breeze.cmd` | 双击停止服务；`stop-breeze.cmd 9000` 只停占着 9000 的那个 |
-
-以前这 3 个文件**必须复制到模型目录里**才能运行（脚本只往自己所在的目录找 exe 和模型）；从 1.3.0 起不用了，留在插件目录里就能用，把模型目录当参数传进去即可：
-
-```bat
-:: 路径换成你的模型目录
-start-breeze.cmd "D:\Breeze-TTS-2.cpp"
-```
-
-脚本会在这个目录里找：
-
-```
-<模型目录>\
-├── breeze-tts-2-q8_0.gguf                            # 模型权重（两层内都能找到）
-├── breeze-tts-2-v0.1.6-windows-x64-vulkan\           # 预编译服务（两层内都能找到）
-│   └── breeze-server.exe
-└── voice\                                            # 音色目录（--voices-dir 指向这里）
-    └── my-voice.breeze
-```
-
-| 脚本能力 | 说明 |
-| --- | --- |
-| 目录定位 | `-Root "路径"` 或第一个位置参数；不给就用脚本自己所在目录 |
-| 自动识别 | `*.gguf`（多个时弹菜单并记住选择）、`breeze-server.exe`（子目录也行） |
-| 音色目录 | 优先 `<目录>\voice`，没有音色就用服务程序同目录 |
-| 端口冲突 | 只清理自家的 `breeze-server`，别人的程序不动 |
-| 关窗即停 | Job Object 守护，窗口一关系统回收进程，显存立刻释放 |
-
-更多细节见 [`scripts/README.md`](scripts/README.md)。
-
-服务起来后可以直接在「服务控制」页展开「模型可视化」查看，也可以用浏览器打开该地址：
-
-![模型可视化网页](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/webui.png)
+> - 想用脚本手动起停（不经过面板）：见 [`scripts/README.md`](scripts/README.md)
 
 ---
 
@@ -173,7 +132,7 @@ start-breeze.cmd "D:\Breeze-TTS-2.cpp"
 
 ---
 
-## ⚙️ 配置说明【如果有变动，则改】
+## ⚙️ 配置说明
 
 安装后在 AstrBot 管理面板的 **插件配置** 中找到 `Breeze TTS 克隆语音`。
 
@@ -256,9 +215,9 @@ start-breeze.cmd "D:\Breeze-TTS-2.cpp"
 
 ![QQ 里收到语音回复](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/qq-effect.png)
 
-**日志里能看到生成耗时（生成速度一并可见）【日志照片也改下:C:\Users\Unknown_Future\Desktop\素材\屏幕截图 2026-11-03 213833.png,先加上，最后准备提交时统一改成云端照片】：**
+**日志里能看到生成耗时（生成速度一并可见）：**
 
-![生成速度日志](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/log-speed.png)
+![生成速度日志](docs/log-speed.png)
 
 ---
 
