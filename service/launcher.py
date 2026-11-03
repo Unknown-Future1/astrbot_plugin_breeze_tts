@@ -20,6 +20,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -37,6 +38,9 @@ VOICES_DIR_NAME = "voice"
 
 DEFAULT_PORT = 9000
 DEFAULT_PARALLEL = 4
+
+# 串行化「启动服务」：防止页面双击 / 自动拉起并发时叠出两个进程
+_START_LOCK = threading.Lock()
 
 # 找 exe / 模型时最多往下钻几层（够覆盖 "版本子目录" 这种布局）
 _SEARCH_DEPTH = 2
@@ -472,6 +476,34 @@ class ServiceManager:
             stale.append(item["pid"])
         return stale
 
+    def _other_instances(self, exe: Path) -> list[dict]:
+        """同 exe、但端口不是当前配置端口的实例（换端口后留下的旧实例）。"""
+        exe_text = str(exe).lower()
+        others: list[dict] = []
+        for item in _list_processes(EXE_NAME):
+            low = item["cmd"].lower()
+            if exe_text and exe_text not in low:
+                continue
+            match = re.search(r"--port\s+(\d+)", low)
+            port = int(match.group(1)) if match else DEFAULT_PORT
+            if port == self.port:
+                continue
+            others.append({"pid": item["pid"], "port": port})
+        return others
+
+    def _kill_others(self, exe: Path, wait: float = 8.0) -> list[dict]:
+        """清掉其他端口的同 exe 实例（插件默认只保留一个模型服务）。"""
+        targets = self._other_instances(exe)
+        killed = []
+        for item in targets:
+            if _kill_pid(item["pid"]):
+                killed.append(item)
+        if killed:
+            deadline = time.monotonic() + max(1.0, wait)
+            pids = [k["pid"] for k in killed]
+            while time.monotonic() < deadline and any(_pid_alive(pid) for pid in pids):
+                time.sleep(0.2)
+        return killed
     def _kill_stale(self, exe: Path, wait: float = 6.0) -> list[int]:
         """清理同端口残留并等它们真正退出，返回被清理的 PID。"""
         killed = [pid for pid in self._stale_pids(exe) if _kill_pid(pid)]
@@ -602,6 +634,7 @@ class ServiceManager:
             "api": self.base_url,
             "webui": f"http://127.0.0.1:{self.port}/" if self.webui else "",
             "sample_rate": (health or {}).get("sample_rate", 0),
+
             "log_tail": log_lines,
             "log_file": str(self.log_file),
         }
@@ -618,6 +651,11 @@ class ServiceManager:
         return self._log_fh
 
     def start(self, model_hint: str = "", wait: float = 25.0) -> dict:
+        # 串行执行：并发启动（页面双击 + 自动拉起）时不会叠出两个实例
+        with _START_LOCK:
+            return self._start_locked(model_hint, wait)
+
+    def _start_locked(self, model_hint: str = "", wait: float = 25.0) -> dict:
         if not IS_WINDOWS:
             return {"ok": False, "message": "只有 Windows 能管本地服务"}
         if self.health()[0]:
@@ -662,9 +700,16 @@ class ServiceManager:
         # 同 exe + 同端口的残留（上次卡在加载没绑端口的僵尸）先清掉，
         # 否则会再拉起一个，变成一堆抢显存的进程
         cleaned = self._kill_stale(exe)
-        cleaned_note = (
-            f"（已清理同端口残留进程 {', '.join(map(str, cleaned))}）" if cleaned else ""
-        )
+        others = self._kill_others(exe)
+        notes = []
+        if cleaned:
+            notes.append(f"已清理同端口残留进程 {', '.join(map(str, cleaned))}")
+        if others:
+            notes.append(
+                "已停止其他端口的旧实例 "
+                + ", ".join(f"{o['port']}(PID {o['pid']})" for o in others)
+            )
+        cleaned_note = f"（{'；'.join(notes)}）" if notes else ""
 
         stale = self.port_owner()
         if stale:
@@ -740,6 +785,7 @@ class ServiceManager:
             "model": str(model),
             "elapsed": round(elapsed, 1),
             "cleaned": cleaned,
+            "stopped_others": others,
             "message": f"服务已就绪（{elapsed:.1f} 秒）{cleaned_note}",
         }
 
@@ -760,11 +806,13 @@ class ServiceManager:
             add(self._proc.pid)
         add(self._read_state().get("pid"))
         add(self.port_owner())
-        # 卡在加载、没绑端口的残留也一起收掉
+        # 卡在加载、没绑端口的残留 + 其他端口的旧实例，一并收掉（默认只留一个服务）
         exe = self.exe()
         if exe:
             for pid in self._stale_pids(exe):
                 add(pid)
+            for item in self._other_instances(exe):
+                add(item["pid"])
 
         killed = []
         for pid in pids:
