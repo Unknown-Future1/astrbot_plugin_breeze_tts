@@ -26,8 +26,8 @@
   "auto_start_service": {
     "description": "启用插件时自动拉起服务",
     "type": "bool",
-    "default": false,
-    "hint": "开启后 AstrBot 启动时如果探测不到服务，会用上面的目录自动启动 breeze-server（后台窗口，不弹控制台）。没填目录则不动作。"
+    "default": true,
+    "hint": "默认开启：AstrBot 启动或改完设置保存时，如果探测不到服务，就用上面的目录和端口自动启动 breeze-server（后台窗口，不弹控制台）。没填目录则不动作；不想开机占显存就关掉。"
   },
   "tts_probability": {
     "description": "触发概率（%）",

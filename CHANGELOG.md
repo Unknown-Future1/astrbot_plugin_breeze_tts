@@ -42,7 +42,7 @@
 - `model_file`（多量化版本时指定，默认自动）
 - `service_port`（默认 9000）
 - `service_parallel`（默认 4）
-- `auto_start_service`（启用插件时自动拉起服务，默认关）
+- `auto_start_service`（**默认开启**：探测不到服务就用目录+端口自动拉起；目录没填则跳过）
 - `fail_reply_text`（默认「刚刚嗓子有点干,没说出话…等会再说」；`enable_tts_command` 内置默认开启，不进面板）
 
 ## [1.2.0] - 2026-11-02

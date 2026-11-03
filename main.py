@@ -153,7 +153,7 @@ class BreezeTTSPlugin(Star):
         self.model_dir = str(cfg.get("model_dir") or "").strip()
         self.model_file = str(cfg.get("model_file") or "").strip()
         self.service_parallel = _as_int(cfg.get("service_parallel", 4), 4, 1, 16)
-        self.auto_start_service = _as_bool(cfg.get("auto_start_service", False), False)
+        self.auto_start_service = _as_bool(cfg.get("auto_start_service", True), True)
         self._auto_start_task = None
         self.service = ServiceManager(
             plugin_dir=os.path.dirname(os.path.abspath(__file__)),

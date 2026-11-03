@@ -196,7 +196,7 @@ start-breeze.cmd "H:\Breeze-TTS-2.cpp"
 | `model_file` | `string` | `""` | 留空=自动用唯一的 `*.gguf`；目录里有多个量化版本时填文件名指定 |
 | `service_port` | `int` | `9000` | **服务端口**：连接（`127.0.0.1:端口`）、一键启动、探测都用它；9001 是 WebSocket 口，别填 |
 | `service_parallel` | `int` | `4` | 传给 `--parallel`，显存紧张就改 2 |
-| `auto_start_service` | `bool` | `false` | 打开后 AstrBot 启动时若探测不到服务，自动按上面的目录拉起（后台窗口） |
+| `auto_start_service` | `bool` | `true` | **默认开启**：AstrBot 启动或改完设置保存时若探测不到服务，自动按上面的目录和端口拉起（后台窗口）；不想开机占显存就关掉 |
 
 ### 语气指令的优先级
 
