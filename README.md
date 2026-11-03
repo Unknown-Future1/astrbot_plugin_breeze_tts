@@ -83,15 +83,15 @@
 
 3. **确认端口**：默认 `9000`，可以自己改，但不要填被其他服务占用的端口。
 
-   ![① 保存后探测端口](docs/start-1-detect.png)
+   ![① 保存后探测端口](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@33ceb9dfb76e9e916b6cb19a85915bb66210c17d/docs/start-1-detect.png)
 
    填好上面的内容后点**保存**，然后**移步到「服务控制」页启动服务**：
 
    - 刚保存完时，插件会先花几秒探测你设置的端口，所以期间服务页的状态还没出来，属正常
 
-     ![② 自动拉起模型、等待就绪](docs/start-2-loading.png)
+     ![② 自动拉起模型、等待就绪](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@33ceb9dfb76e9e916b6cb19a85915bb66210c17d/docs/start-2-loading.png)
 
-     ![③ 服务已在线](docs/start-3-online.png)
+     ![③ 服务已在线](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@33ceb9dfb76e9e916b6cb19a85915bb66210c17d/docs/start-3-online.png)
 
    - 启动服务
 
