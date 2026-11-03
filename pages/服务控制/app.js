@@ -58,12 +58,10 @@ function syncViz(st) {
   const card = $("viz-card");
   const frame = $("viz-frame");
   const empty = $("viz-empty");
-  const link = $("viz-link");
   const healthy = Boolean(st.healthy);
   const url = st.webui || st.api || "";
 
   if (healthy && url) {
-    link.href = url;
     empty.hidden = true;
     frame.hidden = false;
     if (frame.dataset.src !== url) {
@@ -77,7 +75,6 @@ function syncViz(st) {
     frame.hidden = true;
     frame.removeAttribute("src");
     frame.dataset.src = "";
-    link.removeAttribute("href");
     card.open = false;
   }
 
