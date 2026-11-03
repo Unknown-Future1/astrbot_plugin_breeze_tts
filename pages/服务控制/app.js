@@ -54,6 +54,18 @@ function statusLabel(st) {
 
 /* ------------------------------------------------------- 模型可视化（折叠） */
 
+// 让 iframe 底部贴住浏览器窗口底部：外层不用滚动，里面能显示更多
+function fitVizHeight() {
+  const frame = $("viz-frame");
+  const card = $("viz-card");
+  const open = Boolean(card && card.open && frame && !frame.hidden);
+  document.body.classList.toggle("viz-open", open);
+  if (!open) return;
+  const rect = frame.getBoundingClientRect();
+  const avail = window.innerHeight - rect.top - 30;
+  frame.style.height = `${Math.max(420, Math.floor(avail))}px`;
+}
+
 function syncViz(st) {
   const card = $("viz-card");
   const frame = $("viz-frame");
@@ -83,6 +95,7 @@ function syncViz(st) {
 
   $("viz-hint").textContent = healthy ? "已连接" : "服务未连接";
   state.wasHealthy = healthy;
+  requestAnimationFrame(fitVizHeight);
 }
 
 /* ------------------------------------------------------------------ 渲染 */
@@ -243,14 +256,18 @@ $("voice-select").addEventListener("change", async (e) => {
 // 折叠卡片被手动展开时，若服务在线则补加载
 $("viz-card").addEventListener("toggle", () => {
   const st = state.status;
-  if (!st || !st.healthy) return;
   const frame = $("viz-frame");
-  const url = st.webui || st.api || "";
-  if (url && frame.dataset.src !== url) {
-    frame.dataset.src = url;
-    frame.src = url;
+  if (st && st.healthy) {
+    const url = st.webui || st.api || "";
+    if (url && frame.dataset.src !== url) {
+      frame.dataset.src = url;
+      frame.src = url;
+    }
   }
+  requestAnimationFrame(fitVizHeight);
 });
+
+window.addEventListener("resize", () => requestAnimationFrame(fitVizHeight));
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refresh();
