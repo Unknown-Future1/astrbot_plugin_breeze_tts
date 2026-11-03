@@ -29,6 +29,7 @@
 
 ### 变更
 
+- **设置面板按使用频率重排**：模型目录、模型文件、服务地址、端口、自动拉起放到最前；`/tts` 开关不再出现在设置里（保持默认开启，需要时手动加 `enable_tts_command: false` 关闭）；合成失败提示默认文案改为「刚刚嗓子有点干,没说出话…等会再说」
 - **移除仓库内的 `docs/` 配图**（6 张，1.14 MB）
   - README 的图片地址固定在提交 `55f345f`，由 jsDelivr 提供，不依赖 HEAD 是否还带这些文件
   - 插件包体：**1.47 MB → 0.33 MB**（AstrBot Cloud 打包按 HEAD 计算）
@@ -41,8 +42,7 @@
 - `service_port`（默认 9000）
 - `service_parallel`（默认 4）
 - `auto_start_service`（启用插件时自动拉起服务，默认关）
-- `enable_tts_command`（默认开）
-- `fail_reply_text`（默认「（嗓子哑了…稍后再试）」）
+- `fail_reply_text`（默认「刚刚嗓子有点干,没说出话…等会再说」；`enable_tts_command` 内置默认开启，不进面板）
 
 ## [1.2.0] - 2026-11-02
 

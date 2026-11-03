@@ -185,8 +185,9 @@ start-breeze.cmd "H:\Breeze-TTS-2.cpp"
 | `custom_instruction` | `text` | `""` | 手写指令，**优先级最高**，填了就用它 |
 | `enable_tts_tool_minmax` | `bool` | `true` | 工具调用是否也受长度限制 |
 | `enable_llm_response` | `bool` | `false` | `false`=群里只看到语音；`true`=文字+语音都发 |
-| `enable_tts_command` | `bool` | `true` | 启用 `/tts 要念的内容` 手工合成，不受触发概率影响 |
-| `fail_reply_text` | `string` | `（嗓子哑了…稍后再试）` | 合成失败时补发的提示；**留空则不提示** |
+| `fail_reply_text` | `string` | `刚刚嗓子有点干,没说出话…等会再说` | 合成失败时补发的提示；**留空则不提示** |
+
+> `/tts` 指令默认开启，**不再出现在设置面板**。想关掉的话，手动往插件配置里加 `"enable_tts_command": false` 即可。
 
 ### 本地服务（模型目录 / 一键起停）
 
