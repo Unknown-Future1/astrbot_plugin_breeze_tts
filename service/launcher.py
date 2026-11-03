@@ -127,6 +127,45 @@ def _pid_image(pid: int) -> str:
         k32.CloseHandle(handle)
 
 
+def _list_processes(image_name: str) -> list[dict]:
+    """列出指定映像名的进程（PID + 完整命令行）。仅 Windows。"""
+    if not IS_WINDOWS:
+        return []
+    script = (
+        "$ErrorActionPreference='SilentlyContinue'; "
+        f"Get-CimInstance Win32_Process -Filter \"Name='{image_name}'\" | "
+        "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
+    )
+    try:
+        done = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=25,
+            creationflags=CREATE_NO_WINDOW,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    raw = (done.stdout or "").strip()
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return []
+    if isinstance(data, dict):
+        data = [data]
+    rows: list[dict] = []
+    for item in data:
+        try:
+            pid = int(item.get("ProcessId") or 0)
+        except (TypeError, ValueError):
+            continue
+        if pid:
+            rows.append({"pid": pid, "cmd": str(item.get("CommandLine") or "")})
+    return rows
+
+
 def _looks_like_breeze(pid: int) -> bool:
     """这个 PID 是不是 breeze-server（拿不到映像名时按可信处理）。"""
     if not pid:
@@ -437,6 +476,39 @@ class ServiceManager:
                 result.append({"id": item, "saved": False})
         return result
 
+    def _stale_pids(self, exe: Path) -> list[int]:
+        """同 exe、同端口的残留 breeze-server。
+
+        典型场景：上次启动卡在模型加载（还没绑端口），端口看起来是空的，
+        再点一次启动就会再拉起一个，最后变成一堆抢显存的僵尸进程。
+        """
+        exe_text = str(exe).lower()
+        pattern = re.compile(rf"--port\s+{self.port}(?:\s|$)")
+        stale: list[int] = []
+        for item in _list_processes(EXE_NAME):
+            cmd = item["cmd"]
+            low = cmd.lower()
+            if exe_text and exe_text not in low:
+                continue
+            has_port = "--port" in low
+            if has_port:
+                if not pattern.search(low):
+                    continue  # 别的端口，不管
+            elif self.port != DEFAULT_PORT:
+                continue  # 没写 --port 等价于默认 9000
+            stale.append(item["pid"])
+        return stale
+
+    def _kill_stale(self, exe: Path, wait: float = 6.0) -> list[int]:
+        """清理同端口残留并等它们真正退出，返回被清理的 PID。"""
+        killed = [pid for pid in self._stale_pids(exe) if _kill_pid(pid)]
+        if not killed:
+            return []
+        deadline = time.monotonic() + max(1.0, wait)
+        while time.monotonic() < deadline and any(_pid_alive(pid) for pid in killed):
+            time.sleep(0.2)
+        return killed
+
     # ------------------------------------------------------------ 健康检查
     @property
     def base_url(self) -> str:
@@ -663,6 +735,13 @@ class ServiceManager:
         if self.webui:
             args.append("--webui")
 
+        # 同 exe + 同端口的残留（上次卡在加载没绑端口的僵尸）先清掉，
+        # 否则会再拉起一个，变成一堆抢显存的进程
+        cleaned = self._kill_stale(exe)
+        cleaned_note = (
+            f"（已清理同端口残留进程 {', '.join(map(str, cleaned))}）" if cleaned else ""
+        )
+
         stale = self.port_owner()
         if stale:
             image = _pid_image(stale)
@@ -725,7 +804,10 @@ class ServiceManager:
                 "ok": True,
                 "ready": False,
                 "pid": self._proc.pid,
-                "message": f"已启动，但 {elapsed:.0f} 秒还没就绪（首次加载模型比较慢，稍等再看状态）",
+                "message": (
+                    f"已启动，但 {elapsed:.0f} 秒还没就绪"
+                    f"（首次加载模型比较慢，稍等再看状态）{cleaned_note}"
+                ),
             }
         return {
             "ok": True,
@@ -733,7 +815,8 @@ class ServiceManager:
             "pid": self._proc.pid,
             "model": str(model),
             "elapsed": round(elapsed, 1),
-            "message": f"服务已就绪（{elapsed:.1f} 秒）",
+            "cleaned": cleaned,
+            "message": f"服务已就绪（{elapsed:.1f} 秒）{cleaned_note}",
         }
 
     def stop(self, wait: float = 12.0) -> dict:
@@ -753,6 +836,11 @@ class ServiceManager:
             add(self._proc.pid)
         add(self._read_state().get("pid"))
         add(self.port_owner())
+        # 卡在加载、没绑端口的残留也一起收掉
+        exe = self.exe()
+        if exe:
+            for pid in self._stale_pids(exe):
+                add(pid)
 
         killed = []
         for pid in pids:
