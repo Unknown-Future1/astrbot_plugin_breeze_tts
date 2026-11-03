@@ -158,6 +158,67 @@ def register_web_apis(plugin) -> None:
             }
         )
 
+    # ------------------------------------------------------------- 自动拉起开关
+    async def auto_start():
+        """「随插件自动拉起」一体开关。
+
+        关：先停掉正在运行的服务（失败则回滚不改设置），再保存 auto_start_service=false，
+            热重载后不会再自动拉起。
+        开：保存 auto_start_service=true 并热重载——重载时 initialize() 探测不到服务
+            会自己把服务拉起来（复用现有链路，这里不重复造轮子）。
+        """
+        body = await request.get_json(silent=True) or {}
+        raw = body.get("enabled")
+        text = str(raw).strip().lower() if raw is not None else ""
+        if isinstance(raw, bool):
+            enabled = raw
+        elif text in ("1", "true", "yes", "on", "是"):
+            enabled = True
+        elif text in ("0", "false", "no", "off", "否"):
+            enabled = False
+        else:
+            return jsonify({"ok": False, "message": "缺少 enabled 参数"}), 400
+
+        stop_note = ""
+        if not enabled:
+            stop_result = await _run(manager().stop)
+            if not stop_result.get("ok"):
+                # 服务没停成：设置保持原样，避免「配置关了服务却还活着」的不一致
+                return jsonify(
+                    {
+                        "ok": False,
+                        "message": f"服务停止失败，设置未改动：{stop_result.get('message')}",
+                    }
+                ), 500
+            stop_note = str(stop_result.get("message") or "")
+
+        merged = dict(plugin.config)
+        merged["auto_start_service"] = enabled
+        try:
+            plugin.config.save_config(merged)
+        except Exception:  # noqa: BLE001
+            logger.exception("[BreezeTTS] 保存自动拉起开关失败")
+            return jsonify({"ok": False, "message": "保存设置失败，看一下 AstrBot 日志"}), 500
+
+        star_manager = getattr(plugin.context, "_star_manager", None)
+        applied = False
+        if star_manager is not None:
+            try:
+                success, _ = await star_manager.reload(plugin.name)
+                applied = bool(success)
+            except Exception:  # noqa: BLE001
+                logger.exception("[BreezeTTS] 设置已保存，但插件重载失败")
+
+        if enabled:
+            message = "已允许自动拉起，插件重载后会自动把服务带起来"
+        else:
+            message = "已停止服务并禁止自动拉起，显存已释放"
+            if stop_note:
+                message += f"（{stop_note}）"
+        if not applied:
+            message += "；插件重载失败，重载后完全生效"
+        return jsonify({"ok": True, "enabled": enabled, "applied": applied, "message": message})
+
     add("status", status, ["GET"], "本地服务状态")
     add("log", log, ["GET"], "服务日志尾巴")
     add("validate", validate, ["GET"], "检查模型目录")
@@ -167,5 +228,6 @@ def register_web_apis(plugin) -> None:
     add("stop", stop, ["POST"], "停止本地服务")
     add("restart", restart, ["POST"], "重启本地服务")
     add("config", config, ["GET", "POST"], "读写服务相关配置")
+    add("auto_start", auto_start, ["POST"], "自动拉起一体开关")
 
     logger.debug("[BreezeTTS] Web API 已注册")

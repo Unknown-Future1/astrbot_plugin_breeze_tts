@@ -106,6 +106,11 @@ function renderStatus(st) {
     $("parallel-input").value = st.parallel || 4;
   }
 
+  const autoToggle = $("auto-toggle");
+  if (document.activeElement !== autoToggle) {
+    autoToggle.checked = Boolean(st.config && st.config.auto_start_service);
+  }
+
   const link = $("webui-link");
   if (st.healthy) {
     link.href = st.webui || st.api;
@@ -281,6 +286,32 @@ $("restart-btn").addEventListener("click", () =>
     toast(res.message || "已发出重启请求");
   })
 );
+
+$("auto-toggle").addEventListener("change", async (e) => {
+  const enable = e.target.checked;
+  if (!enable && !window.confirm(
+    "停止正在运行的服务，并禁止随 AstrBot 自动拉起？\n显存会立刻释放；想再用语音时把这个开关打开即可。"
+  )) {
+    e.target.checked = true;
+    return;
+  }
+  e.target.disabled = true;
+  try {
+    const res = await apiPost("auto_start", { enabled: enable });
+    if (!res.ok) {
+      e.target.checked = !enable; // 失败回滚开关显示
+      toast(res.message || "操作失败");
+    } else {
+      toast(res.message || "已保存");
+    }
+  } catch (err) {
+    e.target.checked = !enable;
+    toast(`出错了：${err.message || err}`);
+  } finally {
+    e.target.disabled = false;
+    await refresh();
+  }
+});
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refresh();

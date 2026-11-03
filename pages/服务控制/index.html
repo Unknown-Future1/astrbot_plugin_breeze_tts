@@ -76,6 +76,14 @@
           </label>
         </div>
 
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <strong>随插件自动拉起</strong>
+            <span class="muted">开：AstrBot 启动/保存设置后探测不到服务，会自动把它拉起来；关：立刻停止服务并禁止自动拉起，显存随之释放</span>
+          </span>
+          <input type="checkbox" id="auto-toggle" class="switch" />
+        </label>
+
         <div class="row actions">
           <button type="button" class="primary" id="start-btn">启动服务</button>
           <button type="button" class="danger" id="stop-btn">停止服务</button>

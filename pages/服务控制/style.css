@@ -323,6 +323,73 @@ button.ghost {
   line-height: 1.6;
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.toggle-text strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: #39445c;
+  border: 1px solid var(--line);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.18s ease;
+  outline: none;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #cfd9ee;
+  transition: transform 0.18s ease;
+}
+
+.switch:checked {
+  background: linear-gradient(135deg, #5c96f7, #7f6df2);
+  border-color: transparent;
+}
+
+.switch:checked::after {
+  transform: translateX(20px);
+  background: #fff;
+}
+
+.switch:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .tip code {
   background: var(--card-2);
   border: 1px solid var(--line);
