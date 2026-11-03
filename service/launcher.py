@@ -132,6 +132,7 @@ def _list_processes(image_name: str) -> list[dict]:
     if not IS_WINDOWS:
         return []
     script = (
+        "[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
         "$ErrorActionPreference='SilentlyContinue'; "
         f"Get-CimInstance Win32_Process -Filter \"Name='{image_name}'\" | "
         "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
@@ -141,6 +142,8 @@ def _list_processes(image_name: str) -> list[dict]:
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=25,
             creationflags=CREATE_NO_WINDOW,
         )
@@ -184,6 +187,8 @@ def _taskkill(pid: int) -> bool:
             ["taskkill", "/PID", str(int(pid)), "/F"],
             capture_output=True,
             text=True,
+            encoding="mbcs",
+            errors="replace",
             timeout=15,
             creationflags=CREATE_NO_WINDOW,
         )
@@ -228,6 +233,8 @@ def _taskkill_name(name: str) -> bool:
             ["taskkill", "/IM", name, "/F"],
             capture_output=True,
             text=True,
+            encoding="mbcs",
+            errors="replace",
             timeout=15,
             creationflags=CREATE_NO_WINDOW,
         )
@@ -547,6 +554,8 @@ class ServiceManager:
                 ["netstat", "-ano", "-p", "TCP"],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=15,
                 creationflags=CREATE_NO_WINDOW,
             )

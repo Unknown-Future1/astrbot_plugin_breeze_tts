@@ -4,13 +4,13 @@
   使用<strong>本地模型克隆的自定义音色</strong>，让你的<strong>大肥鱼</strong>进行语音回复。<br/>
   支持克隆音色、语速与音调调节，<strong>无需任何 API Key、不按字计费、不依赖外网</strong>。
 </p>
-
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.0-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.3.1-blue" alt="version" />
   <img src="https://img.shields.io/badge/AstrBot-%E2%89%A5%204.29.3-orange" alt="astrbot" />
   <img src="https://img.shields.io/badge/backend-Breeze%20TTS%202-4f9cf9" alt="backend" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
 </p>
+
 
 ---
 
@@ -83,9 +83,19 @@
 
 3. **确认端口**：默认 `9000`，可以自己改，但不要填被其他服务占用的端口。
 
-   填好上面的内容后点**保存**：面板会自动热重载插件；如果探测不到服务，就会**自动把模型拉起来**（首次约 10~15 秒），看服务页面是否显示在线。
+   ![① 保存后探测端口](docs/start-1-detect.png)
 
-   ![保存后服务显示在线](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292250eec9661a6e0fe0b9489f003339f837/docs/service-online.png)
+   填好上面的内容后点**保存**，然后**移步到「服务控制」页启动服务**：
+
+   - 刚保存完时，插件会先花几秒探测你设置的端口，所以期间服务页的状态还没出来，属正常
+
+     ![② 自动拉起模型、等待就绪](docs/start-2-loading.png)
+
+     ![③ 服务已在线](docs/start-3-online.png)
+
+   - 启动服务
+
+   - 就绪后状态变成**在线**，这一步才算完成
 
 4. **设置音色**：默认自动使用服务端**第一个音色**，不设置也能出声，所以这一步可以先不管。
    想换音色、或者服务端还一个音色都没有时，看下面「如何设置音色」。
