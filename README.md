@@ -27,7 +27,7 @@
 - **效果可观**：中英双语、音色克隆、语气导演、文字造音色，一套齐全
 - **完全本地**：无 API Key、不按字计费、断网也能用
 
-![各量化版本的体积与显存占用](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/model-vram.png)
+![各量化版本的体积与显存占用](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@6b61636/docs/model-vram.png)
 
 **模型相关内容请移步：** <https://github.com/HoppouAI/Breeze-TTS-2.cpp>
 
@@ -64,7 +64,7 @@
 
 #### 最省事：直接让 DSH 代劳
 
-![在 DSH 里让它下载项目、选量化版、配好 9000 端口](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@1c63257/docs/dsh-deploy.png)
+![在 DSH 里让它下载项目、选量化版、配好 9000 端口](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292/docs/dsh-deploy.png)
 
 ---
 
@@ -72,7 +72,7 @@
 
 1. **装插件**：AstrBot 面板 → 插件市场 → 搜索「Breeze TTS 克隆语音」（或 `astrbot_plugin_breeze_tts`），点安装、等它装完
 
-   ![插件市场里搜索并安装](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@1c63257/docs/market-install.png)
+   ![插件市场里搜索并安装](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292/docs/market-install.png)
 
 2. **填模型目录**：插件设置里「本地模型目录」填放刚刚下载完模型的那个文件夹，例如 `D:\Breeze-TTS-2.cpp`
 
@@ -85,7 +85,7 @@
 
    填好上面的内容后点**保存**：面板会自动热重载插件；如果探测不到服务，就会**自动把模型拉起来**（首次约 10~15 秒），看服务页面是否显示在线。
 
-   ![保存后服务显示在线](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@1c63257/docs/service-online.png)
+   ![保存后服务显示在线](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292/docs/service-online.png)
 
 4. **设置音色**：默认自动使用服务端**第一个音色**，不设置也能出声，所以这一步可以先不管。
    想换音色、或者服务端还一个音色都没有时，看下面「如何设置音色」。
@@ -96,7 +96,7 @@
 
 **还没有音色**：对着 DSH 说一句话，它会帮你转码、上传、注册成音色：
 
-![让 DSH 帮你克隆音色](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/dsh-clone.png)
+![让 DSH 帮你克隆音色](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@6b61636/docs/dsh-clone.png)
 
 三个占位符怎么填：
 
@@ -115,7 +115,7 @@
 
 ## 🖥 服务页面（服务控制）
 
-![服务控制页](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@1c63257/docs/service-page.png)
+![服务控制页](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292/docs/service-page.png)
 
 AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控制」。
 
@@ -148,7 +148,7 @@ AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控
 
 不受触发概率影响，走的是同一套合成链路（语速、音调、语气指令都生效）。
 
-![QQ 里 /tts 的实际效果](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@1c63257/docs/tts-effect.png)
+![QQ 里 /tts 的实际效果](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292/docs/tts-effect.png)
 
 ### 让 AI 自己开口
 
@@ -162,11 +162,11 @@ AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控
 
 **实际效果：**
 
-![QQ 里收到语音回复](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@55f345f/docs/qq-effect.png)
+![QQ 里收到语音回复](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@6b61636/docs/qq-effect.png)
 
 **日志里能看到生成耗时（生成速度一并可见）：**
 
-![生成速度日志](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@1c63257/docs/log-speed.png)
+![生成速度日志](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292/docs/log-speed.png)
 
 ---
 
