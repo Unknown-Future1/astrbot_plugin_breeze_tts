@@ -35,6 +35,36 @@
     "default": "",
     "hint": "留空 = 自动探测本机 9000 端口；也可填完整地址（9001 是它的 WebSocket 口，别填）。"
   },
+  "model_dir": {
+    "description": "本地模型目录",
+    "type": "string",
+    "default": "",
+    "hint": "放 breeze-server.exe 和 *.gguf 的那个目录（不用把脚本复制进去）。到这里用「服务控制」页的「自动检测 / 浏览」选，选对了就能一键起停。"
+  },
+  "model_file": {
+    "description": "模型文件（可选）",
+    "type": "string",
+    "default": "",
+    "hint": "留空 = 自动用目录里唯一的 *.gguf；一个目录放了好几个量化版本时，填文件名指定，例如 breeze-tts-2-q8_0.gguf。"
+  },
+  "service_port": {
+    "description": "本地服务端口",
+    "type": "int",
+    "default": 9000,
+    "hint": "一键启动时传给 breeze-server 的 --port，需和上面「Breeze 服务地址」一致；9001 是它的 WebSocket 口，别填。"
+  },
+  "service_parallel": {
+    "description": "并发槽位（--parallel）",
+    "type": "int",
+    "default": 4,
+    "hint": "越大同时能合成越多句，显存吃得也多。显存紧张改成 2，够用保持 4。"
+  },
+  "auto_start_service": {
+    "description": "启用插件时自动拉起服务",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后 AstrBot 启动时如果探测不到服务，会用上面的目录自动启动 breeze-server（后台窗口，不弹控制台）。没填目录则不动作。"
+  },
   "voice_id": {
     "description": "音色 ID",
     "type": "string",

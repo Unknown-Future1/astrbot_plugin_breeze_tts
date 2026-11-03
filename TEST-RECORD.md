@@ -32,6 +32,28 @@
 
 **合计 8 项，全部通过。**
 
+## 服务控制（模型目录 / 起停）测试 — 2026-11-03
+
+测试方式：`service/launcher.py` 只用标准库，脱离 AstrBot 直接跑
+（`python -m service.launcher <action>`），真实环境为 `H:\Breeze-TTS-2.cpp`。
+
+| # | 用例 | 操作 | 结果 |
+|---|---|---|---|
+| S1 | 目录检查 | `validate --root H:\Breeze-TTS-2.cpp` | ✅ 5 项全过（目录/服务程序/模型/音色 2 个/端口 9000 被自家占用） |
+| S2 | 读状态 | `status` | ✅ 认出 PID 4996、模型 Q8_0（3.32 GB）、WebUI 地址、4 个音色 |
+| S3 | 自动检测 | `detect` | ✅ 0.24 s 内扫出 `H:\Breeze-TTS-2.cpp`（exe 在版本子目录两层内） |
+| S4 | 已在运行时启动 | `start`（服务在跑） | ✅ 直接返回「服务已经在 9000 端口跑着了」，不重复拉起 |
+| S5 | 目录不存在 | `start --root C:\no-such-breeze` | ✅ 报「没找到 breeze-server.exe，先在「模型目录」里选对位置」 |
+| S6 | 假服务启动全链路 | 伪造 `breeze-server.exe` + 假 gguf（Python HTTP 服务） | ✅ 0.5 s 就绪；日志捕获到子进程 stdout；`/v1/voices` 转发正常；state 文件写入正确 |
+| S7 | 启动后停止 | 同上，`stop` | ⚠️ 沙箱内 `taskkill` 被拒（低完整性令牌），返回「停止失败：端口还在响应…权限」；**非代码问题**，真实环境由 AstrBot 正常权限执行 |
+| S8 | 脚本带目录 | `start-breeze.cmd "H:\Breeze-TTS-2.cpp" -DryRun` | ✅ 原地运行、不用复制；识别到嵌套 exe、模型、`voice\`，拼出完整命令行 |
+| S9 | Schema/语法 | `_conf_schema.json` 解析 + `py_compile` | ✅ 25 项配置；`main.py` / `webapi.py` / `service/launcher.py` 编译通过 |
+
+> S7 说明：DSH 沙箱把命令跑在 **Low 完整性** 令牌下，连自己拉起的子进程都杀不掉
+> （`taskkill` 报「拒绝访问」）。Windows 上正常权限的 AstrBot 进程结束同用户的
+> `breeze-server.exe` 是可行的 —— 脚本 `stop-breeze.cmd` 一直这么做。
+> 该用例需在真实 AstrBot 里点一次「停止服务」确认。
+
 ## 覆盖到的路径
 
 ```

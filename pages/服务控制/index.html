@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Breeze TTS 服务控制</title>
+  <script src="/api/plugin/page/bridge-sdk.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">♪</span>
+        <div>
+          <h1>Breeze TTS 服务控制</h1>
+          <p class="subtitle" id="subtitle">正在读取状态…</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <span class="pill" id="state-pill"><i class="dot"></i><span id="state-text">未知</span></span>
+        <button type="button" class="ghost" id="refresh-btn">刷新</button>
+      </div>
+    </header>
+
+    <div class="banner" id="banner" hidden></div>
+
+    <main>
+      <article class="card">
+        <div class="card-head">
+          <h2>本地模型目录</h2>
+          <span class="muted">放 breeze-server.exe 和 *.gguf 的那个目录</span>
+        </div>
+        <div class="row">
+          <input type="text" id="dir-input" spellcheck="false"
+                 placeholder="例如 H:\Breeze-TTS-2.cpp" />
+        </div>
+        <div class="row actions">
+          <button type="button" class="primary" id="save-btn">保存并应用</button>
+          <button type="button" class="ghost" id="pick-btn">浏览…</button>
+          <button type="button" class="ghost" id="detect-btn">自动检测</button>
+          <button type="button" class="ghost" id="check-btn">检查目录</button>
+        </div>
+
+        <div class="sub" id="candidates-wrap" hidden>
+          <h3>检测到的目录</h3>
+          <ul class="candidates" id="candidates"></ul>
+        </div>
+
+        <div class="sub" id="checks-wrap" hidden>
+          <h3>目录检查</h3>
+          <ul class="checks" id="checks"></ul>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>服务</h2>
+          <span class="muted" id="service-hint">—</span>
+        </div>
+        <div class="facts">
+          <div class="fact"><span class="k">端口</span><span class="v" id="fact-port">—</span></div>
+          <div class="fact"><span class="k">进程</span><span class="v" id="fact-pid">—</span></div>
+          <div class="fact"><span class="k">模型</span><span class="v" id="fact-model">—</span></div>
+          <div class="fact"><span class="k">音色</span><span class="v" id="fact-voices">—</span></div>
+        </div>
+
+        <div class="row">
+          <label class="field">
+            <span>启动参数</span>
+            <select id="model-select"></select>
+          </label>
+          <label class="field small">
+            <span>并发槽位</span>
+            <input type="number" id="parallel-input" min="1" max="16" step="1" value="4" />
+          </label>
+        </div>
+
+        <div class="row actions">
+          <button type="button" class="primary" id="start-btn">启动服务</button>
+          <button type="button" class="danger" id="stop-btn">停止服务</button>
+          <button type="button" class="ghost" id="restart-btn">重启</button>
+          <a class="ghost link" id="webui-link" target="_blank" rel="noopener">打开 WebUI</a>
+        </div>
+        <p class="tip">
+          启动是在后台起一个不带控制台的 breeze-server 进程，关掉本页也继续跑；
+          想释放显存就点「停止服务」。手动用脚本时，<code>start-breeze.cmd -Root "目录"</code> 也能直接指定这个目录。
+        </p>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>服务日志</h2>
+          <span class="muted" id="log-hint">最近 40 行 · 每 3 秒刷新</span>
+        </div>
+        <pre class="log" id="log">（还没有日志）</pre>
+      </article>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

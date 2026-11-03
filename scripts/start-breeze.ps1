@@ -9,27 +9,47 @@
 #   4) finally 兜底 —— 正常退出 / Ctrl+C 也会杀掉子进程
 #
 # 用法：
-#   start-breeze.ps1                          # 自动识别
+#   start-breeze.ps1                          # 脚本所在目录里自动识别
+#   start-breeze.ps1 "D:\Breeze-TTS-2.cpp"    # 指定模型目录（位置参数，最常用）
+#   start-breeze.ps1 -Root D:\Breeze-TTS-2.cpp  # 同上，具名写法
 #   start-breeze.ps1 -Model q4_k_m.gguf       # 指定模型（文件名或完整路径）
 #   start-breeze.ps1 -Parallel 2              # 指定并发槽
 #   start-breeze.ps1 -Port 9001               # 换端口
 #   start-breeze.ps1 -NoWebui                 # 不启 WebUI
+#   start-breeze.ps1 -NoPause                 # 结束时不按回车（被别的程序调用时用）
 #   start-breeze.ps1 -DryRun                  # 只打印将要执行的命令，不启动
+#
+# 说明：脚本不必放在模型目录里。给了 -Root（或第一个参数是路径）就按那个目录找
+#       breeze-server.exe / *.gguf / voice，没给就退回脚本自己的位置。
 
 param(
+    [Parameter(Position = 0)]
+    [string]$Root = "",      # 模型目录（含 breeze-server.exe 与 *.gguf）
     [switch]$Force,          # 端口被自家进程占用时不再询问，直接结束
     [int]$Port = 9000,
     [string]$Model = "",     # gguf 文件（可只写文件名）
     [string]$Srv = "",       # breeze-server.exe 路径
     [int]$Parallel = 4,
     [switch]$NoWebui,
+    [switch]$NoPause,
     [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
 
-$Root      = $PSScriptRoot
-$VoicesDir = Join-Path $Root 'voice'
+# ---- 定位模型目录：命令行优先，否则用脚本所在目录 ----
+if ($Root) {
+    if (-not (Test-Path -LiteralPath $Root)) {
+        Write-Host ''
+        Write-Host "  x  指定的目录不存在：$Root" -ForegroundColor Red
+        Write-Host '     请传入放着 breeze-server.exe 与 *.gguf 的目录。' -ForegroundColor DarkGray
+        exit 1
+    }
+    $Root = (Resolve-Path -LiteralPath $Root).Path
+} else {
+    $Root = $PSScriptRoot
+}
+
 $Parallel_ = $Parallel
 $LogDir    = Join-Path $Root 'logs'
 $LogOut    = Join-Path $LogDir 'server.out.log'
@@ -40,6 +60,12 @@ $jobHandle = [IntPtr]::Zero
 $proc      = $null
 
 # ============================================================ 工具函数
+
+# 退出前等用户看清楚（-DryRun / -NoPause 时不等）
+function Pause-BeforeExit {
+    if ($DryRun -or $NoPause) { return }
+    $null = Read-Host '  按回车键退出...'
+}
 
 function Test-Service([int]$P) {
     try {
@@ -111,9 +137,22 @@ function Resolve-ServerExe([string]$Given) {
         if (Test-Path $p) { return $p }
         return $null
     }
-    $hits = @(Get-ChildItem $Root -Recurse -Filter 'breeze-server.exe' -File -ErrorAction SilentlyContinue)
+    $hits = @(Get-ChildItem $Root -Recurse -Depth 3 -Filter 'breeze-server.exe' -File -ErrorAction SilentlyContinue)
     if ($hits.Count -eq 0) { return $null }
     return ($hits | Sort-Object LastWriteTime -Descending)[0].FullName
+}
+
+# ---- 目录下两层以内的 *.gguf（越浅越优先）----
+function Get-ModelFiles {
+    $rootLen = $Root.TrimEnd('\').Length
+    $all = @(Get-ChildItem $Root -Recurse -Depth 2 -Filter '*.gguf' -File -ErrorAction SilentlyContinue)
+    $kept = @()
+    foreach ($f in $all) {
+        $rel = $f.FullName.Substring($rootLen).TrimStart('\')
+        $depth = ($rel -split '\\').Count - 1
+        if ($depth -le 2) { $kept += $f }
+    }
+    return @($kept | Sort-Object @{ Expression = { ($_.FullName.Substring($rootLen).TrimStart('\') -split '\\').Count } }, Name)
 }
 
 # ---- 自动发现模型文件 ----
@@ -121,10 +160,13 @@ function Resolve-ModelFile([string]$Given) {
     if ($Given) {
         $p = if (Test-Path $Given) { (Resolve-Path $Given).Path } else { Join-Path $Root $Given }
         if (Test-Path $p) { return $p }
+        # 允许只写文件名
+        $hit = @(Get-ModelFiles | Where-Object { $_.Name -eq $Given })
+        if ($hit.Count -gt 0) { return $hit[0].FullName }
         return $null
     }
 
-    $ggufs = @(Get-ChildItem $Root -Filter '*.gguf' -File -ErrorAction SilentlyContinue | Sort-Object Name)
+    $ggufs = @(Get-ModelFiles)
     if ($ggufs.Count -eq 0) { return $null }
     if ($ggufs.Count -eq 1) { return $ggufs[0].FullName }
 
@@ -258,7 +300,7 @@ try {
     if (-not $SrvPath) {
         Write-Host '        x  找不到 breeze-server.exe' -ForegroundColor Red
         Write-Host "           已搜索: $Root" -ForegroundColor DarkGray
-        if (-not $DryRun) { $null = Read-Host '  按回车键退出...' }
+        Pause-BeforeExit
         exit 1
     }
     Write-Host ("        ok  服务: {0}" -f $SrvPath.Replace($Root, '.')) -ForegroundColor Green
@@ -267,13 +309,24 @@ try {
     if (-not $ModelPath) {
         Write-Host '        x  找不到 .gguf 模型文件' -ForegroundColor Red
         Write-Host "           已搜索: $Root" -ForegroundColor DarkGray
-        if (-not $DryRun) { $null = Read-Host '  按回车键退出...' }
+        Pause-BeforeExit
         exit 1
     }
     $mi = Get-Item $ModelPath
     Write-Host ("        ok  模型: {0}" -f $mi.Name) -ForegroundColor Green
     Write-Host ("            {0:N2} GB  ≈{1} GB 显存（估）" -f ($mi.Length / 1GB), (Get-VramHint $mi.Name $mi.Length)) -ForegroundColor DarkGray
 
+    # ---- 音色目录：<Root>\voice 优先；那里没有音色就退到 exe 同目录 ----
+    $VoicesDir = Join-Path $Root 'voice'
+    $rootVoices = @(Get-ChildItem $VoicesDir -Filter '*.breeze' -ErrorAction SilentlyContinue)
+    if ($rootVoices.Count -eq 0) {
+        $exeDir = Split-Path $SrvPath -Parent
+        $nearVoices = @(Get-ChildItem $exeDir -Filter '*.breeze' -ErrorAction SilentlyContinue)
+        if ($nearVoices.Count -gt 0) {
+            $VoicesDir = $exeDir
+            Write-Host "        音色目录改用服务程序所在目录: $exeDir" -ForegroundColor DarkGray
+        }
+    }
     if (-not (Test-Path $VoicesDir)) {
         if (-not $DryRun) { New-Item -ItemType Directory -Path $VoicesDir -Force | Out-Null }
         Write-Host '        +  音色目录不存在，已创建' -ForegroundColor DarkYellow
@@ -303,24 +356,29 @@ try {
             Write-Host '        这是上一次留下的 breeze-server 进程。' -ForegroundColor DarkYellow
             $go = [bool]$Force
             if (-not $Force) {
-                $ans = Read-Host '        是否结束它并重新启动？[Y/n]'
-                if ($ans -eq '' -or $ans -match '^(y|Y|yes|是)') { $go = $true }
+                if ($NoPause) {
+                    # 非交互调用（被插件/计划任务拉起）时默认重启
+                    $go = $true
+                } else {
+                    $ans = Read-Host '        是否结束它并重新启动？[Y/n]'
+                    if ($ans -eq '' -or $ans -match '^(y|Y|yes|是)') { $go = $true }
+                }
             }
             if ($go) {
                 if (Stop-Breeze) { Write-Host '        ok  已结束，端口已释放' -ForegroundColor Green }
                 else {
                     Write-Host '        x  无法结束，请手动处理' -ForegroundColor Red
-                    $null = Read-Host '  按回车键退出...'
+                    Pause-BeforeExit
                     exit 1
                 }
             } else {
                 Write-Host '  已取消。' -ForegroundColor DarkGray
-                $null = Read-Host '  按回车键退出...'
+                Pause-BeforeExit
                 exit 0
             }
         } else {
             Write-Host '        x  占用者是别的程序，本脚本不会动它' -ForegroundColor Red
-            $null = Read-Host '  按回车键退出...'
+            Pause-BeforeExit
             exit 1
         }
     } else {
@@ -414,7 +472,7 @@ finally {
         try { $null = $proc.WaitForExit(5000) } catch { }
         Write-Host '  服务已停止' -ForegroundColor Green
     }
-    if ($Host.Name -eq 'ConsoleHost' -and -not $DryRun) {
+    if ($Host.Name -eq 'ConsoleHost' -and -not $DryRun -and -not $NoPause) {
         Write-Host ''
         Write-Host '  按回车键关闭窗口...' -ForegroundColor DarkGray
         $null = Read-Host

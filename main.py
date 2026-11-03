@@ -8,10 +8,13 @@ astrbot_plugin_breeze_tts —— 用本地 Breeze TTS 2 模型把文字回复转
   · LLM 工具 clone_tts
   · 自动语气指令（多调一次 LLM 分析情绪）
   · numpy 实现语速（WSOLA）与音调（变调不变速），不依赖外部程序
+  · /tts 手动点播 + 合成失败兜底提示
+  · 「服务控制」页：选模型目录、一键启动/停止本地 breeze-server
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import random
 import re
@@ -30,8 +33,10 @@ from astrbot.core.config import AstrBotConfig
 from astrbot.core.provider.entities import LLMResponse
 from astrbot.core.star.filter.command import GreedyStr
 
+from .service.launcher import IS_WINDOWS, ServiceManager
 from .tts_api.breeze_api import BreezeTTSClient
 from .utils import audio_ops
+from .webapi import register_web_apis
 
 ZERO_WIDTH = "\u200b"
 
@@ -106,6 +111,7 @@ class BreezeTTSPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         cfg = config
+        self.config = config
 
         # ---- 开关与触发 ----
         self.enable_tts = _as_bool(cfg.get("enable_tts", True), True)
@@ -140,6 +146,20 @@ class BreezeTTSPlugin(Star):
         self.enable_tts_command = _as_bool(cfg.get("enable_tts_command", True), True)
         self.fail_reply_text = str(cfg.get("fail_reply_text") or "").strip()
 
+        # ---- 本地服务（模型目录 / 起停控制）----
+        self.model_dir = str(cfg.get("model_dir") or "").strip()
+        self.model_file = str(cfg.get("model_file") or "").strip()
+        self.service_port = _as_int(cfg.get("service_port", 9000), 9000, 1, 65535)
+        self.service_parallel = _as_int(cfg.get("service_parallel", 4), 4, 1, 16)
+        self.auto_start_service = _as_bool(cfg.get("auto_start_service", False), False)
+        self.service = ServiceManager(
+            plugin_dir=os.path.dirname(os.path.abspath(__file__)),
+            model_dir=self.model_dir,
+            model_file=self.model_file,
+            port=self.service_port,
+            parallel=self.service_parallel,
+        )
+
         # ---- 客户端 ----
         self.client = BreezeTTSClient(
             api_base=self.breeze_api,
@@ -156,29 +176,47 @@ class BreezeTTSPlugin(Star):
         # clone_tts 工具随着插件启用，不再单独开关
         self.context.add_llm_tools(BreezeTTSTool(plugin=self))
 
+        # 「服务控制」页的接口（选目录 / 起停服务）
+        try:
+            register_web_apis(self)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"[BreezeTTS] 服务控制接口注册失败：{exc}")
+
+    def _cfg(self, key: str, default=""):
+        """读一条原始配置值（给设置页展示用，不做类型转换）。"""
+        try:
+            value = self.config.get(key, default)
+        except Exception:  # noqa: BLE001
+            return default
+        return default if value is None else value
+
     async def initialize(self):
         """插件启用时：自动识别服务地址与音色，然后做一次连通性自检"""
-        # ---- ① 服务地址：没填就自动探测 ----
+        # ---- ① 服务地址：没填就自动探测（先看配的端口，再看默认 9000）----
         if not self.breeze_api:
-            found = await self.client.probe()
+            ports = tuple(dict.fromkeys((self.service_port, 9000)))
+            found = await self.client.probe(ports=ports)
             if found:
                 self.breeze_api = found
-            else:
-                logger.warning(
-                    "[BreezeTTS] 未配置 breeze_api，且默认端口 9000 没探测到服务；"
-                    "请先启动 start-breeze.cmd，或在插件配置里填上正确地址"
-                )
-                return
 
-        ok = await self.client.health()
+        ok = await self.client.health() if self.breeze_api else False
         if not ok:
             logger.warning(
-                f"[BreezeTTS] 已启用，但连不上服务 {self.breeze_api}"
-                "（请先运行 start-breeze.cmd）；语音会静默跳过，文本回复不受影响"
+                f"[BreezeTTS] 已启用，但连不上服务 {self.breeze_api or ''}"
+                "（到「服务控制」页点一下启动，或自己跑 start-breeze.cmd）；"
+                "语音会静默跳过，文本回复不受影响"
             )
+            if self.auto_start_service:
+                asyncio.create_task(self._auto_start_service())
             return
 
         # ---- ② 音色：没填就用服务端第一个 ----
+        await self._refresh_voice()
+
+        logger.info(f"[BreezeTTS] 已启用，服务在线：{self.breeze_api}，音色：{self.voice_id or '（未识别）'}")
+
+    async def _refresh_voice(self) -> list[str]:
+        """刷新服务端音色列表，顺便补齐没填的 voice_id。"""
         voices = await self.client.list_voices()
         if not self.voice_id:
             if voices:
@@ -198,11 +236,36 @@ class BreezeTTSPlugin(Star):
                 f"[BreezeTTS] 音色 '{self.voice_id}' 不在服务端列表中，"
                 f"现有音色：{', '.join(voices)}"
             )
+        return voices
 
-        logger.info(f"[BreezeTTS] 已启用，服务在线：{self.breeze_api}，音色：{self.voice_id or '（未识别）'}")
+    async def _auto_start_service(self):
+        """按配置自动拉起本地模型服务（异步，不阻塞插件加载）。"""
+        if not IS_WINDOWS:
+            logger.info("[BreezeTTS] 非 Windows 环境，跳过自动启动本地服务")
+            return
+        if not self.service.model_dir:
+            logger.info("[BreezeTTS] 配置里没填「本地模型目录」，跳过自动启动")
+            return
+        logger.info("[BreezeTTS] 探测不到服务，按配置自动启动本地模型（首次加载约 5~10 秒）…")
+        try:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, self.service.start)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"[BreezeTTS] 自动启动异常：{exc}")
+            return
+        if not result.get("ok"):
+            logger.warning(f"[BreezeTTS] 自动启动失败：{result.get('message')}")
+            return
+        logger.info(f"[BreezeTTS] {result.get('message')}")
+        if not self.breeze_api:
+            self.breeze_api = f"http://127.0.0.1:{self.service_port}"
+            self.client.api_base = self.breeze_api
+        await self._refresh_voice()
 
     async def terminate(self):
-        logger.info("[BreezeTTS] 插件已停用/卸载")
+        # 注意：插件停用/重载时故意不结束本地服务，避免「改个配置服务就断了」。
+        # 需要停服务请用「服务控制」页的按钮或 /breeze stop。
+        logger.info("[BreezeTTS] 插件已停用/卸载（本地服务保持运行，可在服务控制页手动停止）")
 
     # ------------------------------------------------------------------ 工具
     def probability(self, percent: float) -> bool:
@@ -387,6 +450,80 @@ class BreezeTTSPlugin(Star):
             return
 
         yield event.chain_result([Comp.Record.fromBase64(audio_b64)])
+
+    # ------------------------------------------- 本地服务开关（仅管理员）
+    @filter.command("breeze")
+    async def cmd_breeze(self, event: AstrMessageEvent, action: GreedyStr):
+        """本地模型服务开关：/breeze status | start | stop | restart"""
+        if not event.is_admin():
+            yield event.plain_result("只有管理员能操作本地服务")
+            return
+
+        cmd = str(action or "").strip().lower()
+        loop = asyncio.get_running_loop()
+
+        if cmd in ("", "status", "状态"):
+            state = await loop.run_in_executor(None, self.service.status)
+            yield event.plain_result(self._format_status(state))
+            return
+
+        if cmd in ("start", "启动", "开"):
+            yield event.plain_result("正在启动本地模型…（首次加载约 5~10 秒）")
+            result = await loop.run_in_executor(None, self.service.start)
+            yield event.plain_result(str(result.get("message") or "没有输出"))
+            if result.get("ok"):
+                if not self.breeze_api:
+                    self.breeze_api = f"http://127.0.0.1:{self.service_port}"
+                    self.client.api_base = self.breeze_api
+                await self._refresh_voice()
+            return
+
+        if cmd in ("stop", "停止", "关"):
+            result = await loop.run_in_executor(None, self.service.stop)
+            yield event.plain_result(str(result.get("message") or "没有输出"))
+            return
+
+        if cmd in ("restart", "重启"):
+            yield event.plain_result("正在重启本地模型…")
+            result = await loop.run_in_executor(None, self.service.restart)
+            yield event.plain_result(str(result.get("message") or "没有输出"))
+            return
+
+        yield event.plain_result(
+            "用法：/breeze status 看状态；/breeze start 启动；"
+            "/breeze stop 停止；/breeze restart 重启"
+        )
+
+    @staticmethod
+    def _format_status(state: dict) -> str:
+        healthy = bool(state.get("healthy"))
+        running = bool(state.get("running"))
+        if healthy:
+            head = "在线"
+        elif running:
+            head = "进程在，但 /health 没响应"
+        else:
+            head = "离线"
+        lines = [
+            "【Breeze TTS 本地服务】",
+            f"状态：{head}",
+            f"端口：{state.get('port')}（PID {state.get('pid') or '—'}）",
+        ]
+        if state.get("model_name"):
+            lines.append(f"模型：{state['model_name']}（{state.get('model_size') or '?'}）")
+        else:
+            lines.append("模型：没找到 .gguf")
+        voices = state.get("voices") or []
+        if voices:
+            shown = ", ".join(voices[:6]) + ("…" if len(voices) > 6 else "")
+            lines.append(f"音色：{len(voices)} 个 → {shown}")
+        if state.get("model_dir"):
+            lines.append(f"目录：{state['model_dir']}")
+        else:
+            lines.append("目录：还没设置（去「服务控制」页选一个）")
+        if not state.get("exe"):
+            lines.append("⚠ 目录里没找到 breeze-server.exe")
+        return "\n".join(lines)
 
     # ------------------------------------------------ 钩子：抹掉重复的文字
     @filter.on_llm_response()
