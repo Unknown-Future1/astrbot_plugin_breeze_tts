@@ -348,9 +348,33 @@ class BreezeTTSPlugin(Star):
                 logger.debug("[BreezeTTS] 无结果，跳过")
                 return
 
-            # 本轮已经由 clone_tts 工具发过语音了，别再补第二条
+            # 工具调用过：语音可能已经发过，也可能要在这里拼成「文字 + 语音」
             if event.get_extra("breeze_spoken"):
-                logger.debug("[BreezeTTS] 本轮已通过工具发过语音，跳过装饰")
+                tool_text = str(event.get_extra("breeze_tool_text") or "").strip()
+                if not tool_text:
+                    logger.debug("[BreezeTTS] 本轮语音已由工具发出，跳过装饰")
+                    return
+                tool_instruction = str(
+                    event.get_extra("breeze_tool_instruction") or ""
+                ).strip()
+                instruction = (
+                    tool_instruction or self.custom_instruction or self.preset_instruction()
+                )
+                cfg = self.cfg_scale if instruction else 1.0
+                wav = await self.client.synth(
+                    text=tool_text,
+                    instructions=instruction or None,
+                    speed_ratio=self.speed_ratio,
+                    pitch_shift=self.pitch_shift,
+                    cfg_scale=cfg,
+                )
+                if not wav:
+                    logger.warning("[BreezeTTS] 工具语音补发失败，本轮只发文字")
+                    return
+                result.chain.append(
+                    Comp.Record.fromBase64(self.client.to_base64(wav))
+                )
+                logger.info("[BreezeTTS] 已把工具语音拼到文字后面（文字 + 语音）")
                 return
 
             # 只处理 LLM 产出（跳过指令返回等）
@@ -524,12 +548,11 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
 
         # chain_result() 是同步方法，返回 MessageEventResult；发送要交给 event.send()
         ev = context.context.event
+        if self.plugin.enable_llm_response:
+            # 保留文字：不在这里发，交给 on_decorating_result 拼成「文字 + 语音」
+            ev.set_extra("breeze_tool_text", text)
+            ev.set_extra("breeze_tool_instruction", instruction or "")
+            ev.set_extra("breeze_spoken", True)
+            return "SUCCESS"
+
         await ev.send(ev.chain_result([Comp.Record.fromBase64(self.plugin.client.to_base64(wav))]))
-
-        # 标记「这一轮已经发过语音」，避免装饰钩子再补一条
-        ev.set_extra("breeze_spoken", True)
-
-        if not self.plugin.enable_llm_response:
-            ev.set_extra("breeze_voice_silence_mode", True)
-
-        return "SUCCESS"
