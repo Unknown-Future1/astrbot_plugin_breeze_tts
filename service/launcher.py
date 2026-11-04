@@ -380,6 +380,7 @@ class ServiceManager:
 
         self._proc = None
         self._log_fh = None
+        self._args_cache: tuple[float, dict] = (0.0, {})
 
     # ------------------------------------------------------------ 路径推断
     def clone(self, **overrides) -> "ServiceManager":
@@ -438,10 +439,14 @@ class ServiceManager:
         return found[0]
 
     def voices_dir(self) -> Path | None:
-        """音色目录：<root>/voices 优先；没有就找旧版 voice、再退到 exe 同目录。"""
+        """音色目录：服务在跑就以它实际的 --voices-dir 为准；否则 voices 优先，其次旧 voice。"""
         root = self.root
         if not root:
             return None
+        # 两个目录并存时（例如手动启动过），运行中的服务用哪个才可信
+        running = self.running_args().get("--voices-dir")
+        if running:
+            return Path(running)
         preferred = root / VOICES_DIR_NAME
         if _has_breeze(preferred):
             return preferred
@@ -456,7 +461,7 @@ class ServiceManager:
         return preferred
 
     def migrate_voices_dir(self) -> str:
-        """把旧版 <root>/voice 里的 .breeze 合并到 <root>/voices（Breeze 默认名）。
+        """（可选，不自动调用）把旧版 <root>/voice 合并到 <root>/voices。
 
         - 新目录没有同名文件 → 直接搬
         - 有同名文件 → 把旧的改名为 <name>.legacy.breeze 再搬，绝不覆盖
@@ -511,6 +516,26 @@ class ServiceManager:
                 result.append({"id": item, "saved": False})
         return result
 
+    def running_args(self, ttl: float = 10.0) -> dict:
+        """运行中实例的启动参数（--voices-dir / --port 等），带短缓存。"""
+        now = time.monotonic()
+        stamp, cached = self._args_cache
+        if now - stamp < ttl:
+            return dict(cached)
+        pid = self.tracked_pid() or self.port_owner()
+        found: dict = {}
+        if pid:
+            for item in _list_processes(EXE_NAME):
+                if item["pid"] != pid:
+                    continue
+                cmd = item["cmd"]
+                for flag in ("--voices-dir", "--port", "--parallel"):
+                    match = re.search(rf"{re.escape(flag)}\s+(\"[^\"]+\"|\S+)", cmd)
+                    if match:
+                        found[flag] = match.group(1).strip('"')
+                break
+        self._args_cache = (now, found)
+        return dict(found)
     def voice_details(self) -> list[dict]:
         """音色明细：/v1/voices 全字段 + 文件是否存在（页面音色库用）。"""
         ok, data = self._get_json("/v1/voices")
@@ -730,6 +755,8 @@ class ServiceManager:
             "voices_dir": str(voices_dir) if voices_dir else "",
             "voice_files": voice_files,
             "voices": [v["id"] for v in self.voices()] if ok else [],
+            # 运行中进程实际用的 --voices-dir（改过启动参数后要重启服务才生效）
+            "voices_dir_running": self.running_args().get("--voices-dir", ""),
             "api": self.base_url,
             "webui": f"http://127.0.0.1:{self.port}/" if self.webui else "",
             "sample_rate": (health or {}).get("sample_rate", 0),
@@ -776,7 +803,7 @@ class ServiceManager:
         if not model:
             return {"ok": False, "message": "没找到 .gguf 模型文件"}
 
-        migrate_note = self.migrate_voices_dir()
+        # 不自动迁移：用户可能一直用 voice（旧脚本建的），就顺着他用；只有两个都没有时才新建 voices
         voices_dir = self.voices_dir()
         if voices_dir:
             try:
@@ -802,8 +829,6 @@ class ServiceManager:
         cleaned = self._kill_stale(exe)
         others = self._kill_others(exe)
         notes = []
-        if migrate_note:
-            notes.append(migrate_note)
         if cleaned:
             notes.append(f"已清理同端口残留进程 {', '.join(map(str, cleaned))}")
         if others:

@@ -545,3 +545,9 @@ input[type="file"] {
 .studio-foot a:hover {
   text-decoration: underline;
 }
+.banner.warn {
+  border-color: #574422;
+  background: #22190c;
+  color: var(--warn);
+  margin: 0 0 12px;
+}

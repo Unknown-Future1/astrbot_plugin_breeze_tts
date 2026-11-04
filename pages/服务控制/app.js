@@ -370,6 +370,17 @@ function renderStatus(st) {
   native.dataset.url = url;
   native.hidden = !url;
 
+  // 运行中进程的启动参数和当前配置不一致（改过端口/音色目录后没重启服务）
+  const warn = $("args-warn");
+  const runningDir = st.voices_dir_running || "";
+  const expectDir = st.voices_dir || "";
+  if (runningDir && expectDir && runningDir !== expectDir) {
+    warn.textContent = `服务还在用旧参数跑着（音色目录 ${runningDir}），点「重启」后会切到 ${expectDir} 并自动迁移旧音色。`;
+    warn.hidden = false;
+  } else {
+    warn.hidden = true;
+  }
+
   // 工作台只在服务在线时显示
   $("studio-card").hidden = !st.healthy;
 
