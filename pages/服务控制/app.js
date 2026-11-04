@@ -264,7 +264,7 @@ async function preview() {
     const player = $("player");
     const audio = $("preview-audio");
     player.hidden = false;
-    $("download-hint").hidden = false;
+    $("download-hint").classList.add("show");
     audio.src = `data:audio/wav;base64,${res.audio_b64}`;
     audio.play().catch(() => {});
   } catch (err) {
@@ -282,7 +282,7 @@ function previewLocalFile() {
   const player = $("player");
   const audio = $("preview-audio");
   player.hidden = false;
-  $("download-hint").hidden = false;
+  $("download-hint").classList.add("show");
   audio.src = URL.createObjectURL(file);
   audio.play().catch(() => {});
 }
@@ -304,8 +304,8 @@ function renderStatus(st) {
   const downloadHint = $("download-hint");
   if (downloadHint) {
     downloadHint.textContent = st.downloads_dir
-      ? `试听音频可以直接下载：播放器右侧「⋮」→「下载」，默认存到 ${st.downloads_dir}`
-      : "试听音频可以直接下载：播放器右侧「⋮」→「下载」";
+      ? `试听音频可下载（播放器「⋮」→ 下载），默认存到 ${st.downloads_dir}；浏览器若改过下载位置以浏览器为准`
+      : "试听音频可下载（播放器「⋮」→ 下载）";
   }
 
   $("service-hint").textContent = st.healthy

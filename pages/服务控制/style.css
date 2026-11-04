@@ -388,9 +388,19 @@ body.busy button {
   margin: 20px 0 0;
 }
 
+/* 下载提示常驻占位：没合成时也留出这一行，出现时不把下面的内容顶下去 */
 .card.studio p.tip.download-hint {
   margin: 8px 0 0;
   font-size: 12px;
+  min-height: 1.6em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  visibility: hidden;
+}
+
+.card.studio p.tip.download-hint.show {
+  visibility: visible;
 }
 
 .card.studio {
@@ -521,11 +531,6 @@ input[type="file"] {
 .player audio {
   flex: 1;
   height: 34px;
-}
-
-.player-icon {
-  color: var(--brand);
-  font-size: 13px;
 }
 
 .studio-foot {

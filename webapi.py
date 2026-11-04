@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import os
 import re
 import webbrowser
 from pathlib import Path
@@ -39,6 +40,53 @@ async def _run(func, *args):
     """把阻塞调用丢到线程池，避免卡住事件循环。"""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, lambda: func(*args))
+
+
+def _downloads_dir() -> str:
+    """本机「下载」目录：Windows 已知文件夹 → 注册表 → ~/Downloads。"""
+    if os.name == "nt":
+        try:  # 已知文件夹最准（用户可能把下载夹挪到别的盘）
+            import ctypes
+            from ctypes import wintypes
+
+            class _GUID(ctypes.Structure):
+                _fields_ = [
+                    ("Data1", wintypes.DWORD),
+                    ("Data2", wintypes.WORD),
+                    ("Data3", wintypes.WORD),
+                    ("Data4", ctypes.c_ubyte * 8),
+                ]
+
+            guid = _GUID(
+                0x374DE290, 0x123F, 0x4565,
+                (ctypes.c_ubyte * 8)(0x91, 0x64, 0x39, 0xC4, 0x92, 0x5E, 0x46, 0x7B),
+            )
+            buf = ctypes.c_wchar_p()
+            hr = ctypes.windll.shell32.SHGetKnownFolderPath(
+                ctypes.byref(guid), 0, None, ctypes.byref(buf)
+            )
+            if hr == 0 and buf.value:
+                path = buf.value
+                ctypes.windll.ole32.CoTaskMemFree(buf)
+                if path:
+                    return path
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+            ) as key:
+                raw, _ = winreg.QueryValueEx(key, "{374DE290-123F-4565-9164-39C4925E467B}")
+            path = os.path.expandvars(str(raw or ""))
+            if path:
+                return path
+        except Exception:  # noqa: BLE001
+            pass
+    folder = Path.home() / "Downloads"
+    return str(folder) if folder.exists() else ""
 
 
 def _is_wav(raw: bytes) -> bool:
@@ -73,8 +121,7 @@ def register_web_apis(plugin) -> None:
             {"id": "gentle", "label": "温柔（稍慢、偏轻）"},
             {"id": "whisper", "label": "耳语（极慢、很小声）"},
         ]
-        downloads = Path.home() / "Downloads"
-        payload["downloads_dir"] = str(downloads) if downloads.exists() else ""
+        payload["downloads_dir"] = _downloads_dir()
         payload["defaults"] = {
             "style_preset": getattr(plugin, "style_preset", "normal"),
             "custom_instruction": getattr(plugin, "custom_instruction", ""),
