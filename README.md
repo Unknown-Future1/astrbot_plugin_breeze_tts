@@ -111,7 +111,7 @@
 2. 在「克隆新音色」里选一段 **3~20 秒的 WAV**，填上它说的**每一个字**和名字
 3. 点「克隆并保存」，新音色立刻出现在音色库和上面的「音色」下拉里
 
-![克隆新音色](docs/service-studio.png)
+![克隆新音色](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@770f603195c43d0d31cc439861784fd69dba7da7/docs/service-studio.png)
 
 ---
 
@@ -119,9 +119,9 @@
 
 AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控制」。
 
-![音色库与克隆](docs/service-studio.png)
+![音色库与克隆](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@770f603195c43d0d31cc439861784fd69dba7da7/docs/service-studio.png)
 
-![试听](docs/service-preview.png)
+![试听](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@770f603195c43d0d31cc439861784fd69dba7da7/docs/service-preview.png)
 
 ### 服务状态
 
