@@ -13,6 +13,10 @@
   - 删除音色会同时移除内存与 `.breeze` 文件；文件被服务占用时会提示重启后清理
 - 新增接口：`voices`（明细）、`voice_add`（克隆）、`voice_delete`、`voice_update`、`preview`（试听）
 
+### 变更
+
+- 音色目录从 `voice` 改为 **`voices`**（与 Breeze 自身默认名一致）；老版本留下的 `voice\` 会在下次启动时自动把 `.breeze` 迁移过去
+
 ### 说明
 
 - 克隆只收 **WAV**：Breeze 的解码器只认 WAV，mp3 / m4a / flac 会被服务直接拒绝

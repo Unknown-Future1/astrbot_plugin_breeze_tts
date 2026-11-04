@@ -19,6 +19,7 @@ import ctypes
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -34,7 +35,8 @@ CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 EXE_NAME = "breeze-server.exe"
 GGUF_SUFFIX = ".gguf"
-VOICES_DIR_NAME = "voice"
+VOICES_DIR_NAME = "voices"          # 与 Breeze 自身默认一致（复数）
+LEGACY_VOICES_DIR_NAME = "voice"    # 旧版本用的单数目录，启动时自动迁移
 
 DEFAULT_PORT = 9000
 DEFAULT_PARALLEL = 4
@@ -436,17 +438,66 @@ class ServiceManager:
         return found[0]
 
     def voices_dir(self) -> Path | None:
-        """音色目录：<root>/voice 优先；没有就退到 exe 同目录（服务默认位置）。"""
+        """音色目录：<root>/voices 优先；没有就找旧版 voice、再退到 exe 同目录。"""
         root = self.root
         if not root:
             return None
         preferred = root / VOICES_DIR_NAME
         if _has_breeze(preferred):
             return preferred
+        legacy = root / LEGACY_VOICES_DIR_NAME
+        if _has_breeze(legacy):
+            return legacy
         exe = self.exe()
-        if exe and _has_breeze(exe.parent):
-            return exe.parent
+        if exe:
+            for cand in (exe.parent / VOICES_DIR_NAME, exe.parent / LEGACY_VOICES_DIR_NAME):
+                if _has_breeze(cand):
+                    return cand
         return preferred
+
+    def migrate_voices_dir(self) -> str:
+        """把旧版 <root>/voice 里的 .breeze 合并到 <root>/voices（Breeze 默认名）。
+
+        - 新目录没有同名文件 → 直接搬
+        - 有同名文件 → 把旧的改名为 <name>.legacy.breeze 再搬，绝不覆盖
+        - 旧目录搬空后删掉
+        """
+        root = self.root
+        if not root:
+            return ""
+        new = root / VOICES_DIR_NAME
+        old = root / LEGACY_VOICES_DIR_NAME
+        if not old.is_dir():
+            return ""
+        try:
+            new.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return ""
+        moved = renamed = 0
+        for item in list(old.glob("*.breeze")):
+            target = new / item.name
+            try:
+                if target.exists():
+                    stem = item.stem
+                    target = new / f"{stem}.legacy.breeze"
+                    n = 2
+                    while target.exists():
+                        target = new / f"{stem}.legacy{n}.breeze"
+                        n += 1
+                    renamed += 1
+                shutil.move(str(item), str(target))
+                moved += 1
+            except OSError:
+                continue
+        try:
+            if not any(old.iterdir()):
+                old.rmdir()
+        except OSError:
+            pass
+        if not moved:
+            return ""
+        extra = f"，其中 {renamed} 个同名改名为 .legacy" if renamed else ""
+        return f"已把音色目录合并到 {new}（{moved} 个{extra}）"
 
     def voices(self) -> list[dict]:
         ok, data = self._get_json("/v1/voices")
@@ -725,6 +776,7 @@ class ServiceManager:
         if not model:
             return {"ok": False, "message": "没找到 .gguf 模型文件"}
 
+        migrate_note = self.migrate_voices_dir()
         voices_dir = self.voices_dir()
         if voices_dir:
             try:
@@ -750,6 +802,8 @@ class ServiceManager:
         cleaned = self._kill_stale(exe)
         others = self._kill_others(exe)
         notes = []
+        if migrate_note:
+            notes.append(migrate_note)
         if cleaned:
             notes.append(f"已清理同端口残留进程 {', '.join(map(str, cleaned))}")
         if others:

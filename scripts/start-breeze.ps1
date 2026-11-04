@@ -1,4 +1,4 @@
-﻿# Breeze TTS 2 启动器（通用版：自动识别模型与服务程序）
+# Breeze TTS 2 启动器（通用版：自动识别模型与服务程序）
 #
 # 支持任意量化版本（q8_0 / q6_k / q4_k_m / f16 ...）与任意服务版本目录。
 #
@@ -20,7 +20,7 @@
 #   start-breeze.ps1 -DryRun                  # 只打印将要执行的命令，不启动
 #
 # 说明：脚本不必放在模型目录里。给了 -Root（或第一个参数是路径）就按那个目录找
-#       breeze-server.exe / *.gguf / voice，没给就退回脚本自己的位置。
+#       breeze-server.exe / *.gguf / voices，没给就退回脚本自己的位置。
 
 param(
     [Parameter(Position = 0)]
@@ -316,8 +316,8 @@ try {
     Write-Host ("        ok  模型: {0}" -f $mi.Name) -ForegroundColor Green
     Write-Host ("            {0:N2} GB  ≈{1} GB 显存（估）" -f ($mi.Length / 1GB), (Get-VramHint $mi.Name $mi.Length)) -ForegroundColor DarkGray
 
-    # ---- 音色目录：<Root>\voice 优先；那里没有音色就退到 exe 同目录 ----
-    $VoicesDir = Join-Path $Root 'voice'
+    # ---- 音色目录：<Root>\voices 优先（与 Breeze 默认一致）；那里没有音色就退到 exe 同目录 ----
+    $VoicesDir = Join-Path $Root 'voices'
     $rootVoices = @(Get-ChildItem $VoicesDir -Filter '*.breeze' -ErrorAction SilentlyContinue)
     if ($rootVoices.Count -eq 0) {
         $exeDir = Split-Path $SrvPath -Parent
