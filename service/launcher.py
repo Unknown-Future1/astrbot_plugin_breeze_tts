@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import logging
 import os
 import re
 import shutil
@@ -28,6 +29,7 @@ import urllib.request
 from pathlib import Path
 
 IS_WINDOWS = os.name == "nt"
+logger = logging.getLogger("astrbot_plugin_breeze_tts.launcher")
 
 # 子进程标志：不弹控制台窗口；独立进程组，Ctrl+C 不会连带杀掉
 CREATE_NO_WINDOW = 0x08000000
@@ -470,14 +472,20 @@ class ServiceManager:
         return candidates[0][0]
 
     def voices_dir(self) -> Path | None:
-        """音色目录：服务在跑听它的 --voices-dir；否则按 .breeze 实际所在目录推断。"""
+        """音色目录：只在「模型目录」范围内找；服务在跑时听它的 --voices-dir（也必须在模型目录内）。"""
         root = self.root
         if not root:
             return None
-        # 服务在跑时，它用的目录最可信（可能和我们推断的不一致）
+
+        # 服务在跑时以它的 --voices-dir 为准，但必须落在模型目录里，否则忽略
         running = self.running_args().get("--voices-dir")
         if running:
-            return Path(running)
+            try:
+                candidate = Path(running).resolve(strict=False)
+                candidate.relative_to(root.resolve(strict=False))
+                return candidate
+            except (ValueError, OSError):
+                logger.debug(f"[BreezeTTS] 服务的音色目录不在模型目录内，忽略：{running}")
 
         now = time.monotonic()
         stamp, cached = self._voices_cache
@@ -485,10 +493,6 @@ class ServiceManager:
             return cached
 
         detected = self._detect_voices_dir(root)
-        if detected is None:
-            exe = self.exe()
-            if exe:
-                detected = self._detect_voices_dir(exe.parent)
         result = detected or (root / VOICES_DIR_NAME)
         self._voices_cache = (now, result)
         return result
