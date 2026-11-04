@@ -149,7 +149,7 @@ function renderVoices(payload) {
 }
 
 async function loadVoices(force) {
-  if (state.busy) return;
+  if (state.busy && !force) return;
   const fresh = Date.now() - state.voicesAt < 12000;
   if (!force && fresh) return;
   try {
@@ -198,12 +198,12 @@ async function cloneVoice() {
     $("clone-name").value = "";
     $("clone-desc").value = "";
     toast(res.message || "音色已保存");
-    await loadVoices(true);
   } catch (err) {
     toast(`出错了：${err.message || err}`);
   } finally {
     setBusy(false);
     await refresh();
+    await loadVoices(true);
   }
 }
 
@@ -213,12 +213,12 @@ async function deleteVoice(id) {
   try {
     const res = await apiPost("voice_delete", { id });
     toast(res.message || (res.ok ? "已删除" : "删除失败"));
-    await loadVoices(true);
   } catch (err) {
     toast(`出错了：${err.message || err}`);
   } finally {
     setBusy(false);
     await refresh();
+    await loadVoices(true);
   }
 }
 
@@ -229,12 +229,12 @@ async function editVoice(id, current) {
   try {
     const res = await apiPost("voice_update", { id, description: next.trim() });
     toast(res.message || (res.ok ? "已保存" : "保存失败"));
-    await loadVoices(true);
   } catch (err) {
     toast(`出错了：${err.message || err}`);
   } finally {
     setBusy(false);
     await refresh();
+    await loadVoices(true);
   }
 }
 
@@ -264,6 +264,7 @@ async function preview() {
     const player = $("player");
     const audio = $("preview-audio");
     player.hidden = false;
+    $("download-hint").hidden = false;
     audio.src = `data:audio/wav;base64,${res.audio_b64}`;
     audio.play().catch(() => {});
   } catch (err) {
@@ -281,6 +282,7 @@ function previewLocalFile() {
   const player = $("player");
   const audio = $("preview-audio");
   player.hidden = false;
+  $("download-hint").hidden = false;
   audio.src = URL.createObjectURL(file);
   audio.play().catch(() => {});
 }
@@ -299,6 +301,13 @@ function renderStatus(st) {
   $("fact-model").textContent = st.model_name
     ? `${st.model_name}${st.model_size ? `（${st.model_size}）` : ""}`
     : "没找到 .gguf";
+  const downloadHint = $("download-hint");
+  if (downloadHint) {
+    downloadHint.textContent = st.downloads_dir
+      ? `试听音频可以直接下载：播放器右侧「⋮」→「下载」，默认存到 ${st.downloads_dir}`
+      : "试听音频可以直接下载：播放器右侧「⋮」→「下载」";
+  }
+
   $("service-hint").textContent = st.healthy
     ? `服务在 ${st.api} 上正常响应`
     : st.running
@@ -497,10 +506,18 @@ $("clone-btn").addEventListener("click", cloneVoice);
 $("clone-preview-btn").addEventListener("click", previewLocalFile);
 $("preview-btn").addEventListener("click", preview);
 
-$("native-link").addEventListener("click", (e) => {
+$("native-link").addEventListener("click", async (e) => {
   e.preventDefault();
-  const url = $("native-link").dataset.url;
-  if (url) window.open(url, "_blank", "noopener");
+  const link = $("native-link");
+  link.textContent = "正在打开…";
+  try {
+    const res = await apiPost("open_webui", {});
+    toast(res.message || (res.ok ? "已打开" : "打开失败"));
+  } catch (err) {
+    toast(`出错了：${err.message || err}`);
+  } finally {
+    link.textContent = "在浏览器中打开模型界面";
+  }
 });
 
 document.addEventListener("visibilitychange", () => {

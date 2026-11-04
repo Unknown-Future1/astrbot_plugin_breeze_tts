@@ -23,6 +23,8 @@ import asyncio
 import base64
 import binascii
 import re
+import webbrowser
+from pathlib import Path
 
 import aiohttp
 from quart import jsonify, request
@@ -71,6 +73,8 @@ def register_web_apis(plugin) -> None:
             {"id": "gentle", "label": "温柔（稍慢、偏轻）"},
             {"id": "whisper", "label": "耳语（极慢、很小声）"},
         ]
+        downloads = Path.home() / "Downloads"
+        payload["downloads_dir"] = str(downloads) if downloads.exists() else ""
         payload["defaults"] = {
             "style_preset": getattr(plugin, "style_preset", "normal"),
             "custom_instruction": getattr(plugin, "custom_instruction", ""),
@@ -281,7 +285,23 @@ def register_web_apis(plugin) -> None:
             "bytes": len(wav),
         })
 
+    # ------------------------------------------------------------- 打开模型界面
+    async def open_webui():
+        """用默认浏览器打开 Breeze 自带的 WebUI（页面里 window.open 常被挡）。"""
+        st = await _run(manager().status)
+        url = st.get("webui") or st.get("api") or ""
+        if not url:
+            return jsonify({"ok": False, "message": "还没解析出服务地址，先启动服务"}), 400
+        if not st.get("healthy"):
+            return jsonify({"ok": False, "message": "服务没在线，先点「启动服务」"}), 400
+        try:
+            await _run(webbrowser.open, url)
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"ok": False, "message": f"打开失败：{type(exc).__name__}"}), 500
+        return jsonify({"ok": True, "message": f"已在默认浏览器打开：{url}"})
+
     add("status", status, ["GET"], "本地服务状态")
+    add("open_webui", open_webui, ["POST"], "用默认浏览器打开模型界面")
     add("start", start, ["POST"], "启动本地服务")
     add("stop", stop, ["POST"], "停止本地服务")
     add("restart", restart, ["POST"], "重启本地服务")

@@ -388,6 +388,11 @@ body.busy button {
   margin: 20px 0 0;
 }
 
+.card.studio p.tip.download-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
 .card.studio {
   margin-top: 16px;
 }
