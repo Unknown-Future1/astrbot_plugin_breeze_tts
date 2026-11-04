@@ -460,6 +460,45 @@ class ServiceManager:
                 result.append({"id": item, "saved": False})
         return result
 
+    def voice_details(self) -> list[dict]:
+        """音色明细：/v1/voices 全字段 + 文件是否存在（页面音色库用）。"""
+        ok, data = self._get_json("/v1/voices")
+        if not ok or not isinstance(data, list):
+            return []
+        folder = self.voices_dir()
+        result: list[dict] = []
+        for item in data:
+            if not isinstance(item, dict) or not item.get("id"):
+                continue
+            vid = str(item["id"])
+            result.append({
+                "id": vid,
+                "saved": bool(item.get("saved")),
+                "seconds": round(float(item.get("seconds") or 0), 2),
+                "frames": int(item.get("frames") or 0),
+                "ref_text": str(item.get("ref_text") or ""),
+                "description": str(item.get("description") or ""),
+                "file": str(folder / f"{vid}.breeze") if folder else "",
+                "file_exists": bool(folder and (folder / f"{vid}.breeze").exists()),
+            })
+        return result
+
+    def remove_voice_file(self, voice_id: str) -> tuple[bool, str]:
+        """删掉 <voices_dir>/<id>.breeze。服务可能占着文件，失败时返回原因。"""
+        safe = str(voice_id or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", safe):
+            return False, "音色名不合法"
+        folder = self.voices_dir()
+        if not folder:
+            return False, "找不到音色目录"
+        path = folder / f"{safe}.breeze"
+        if not path.exists():
+            return False, "文件不存在"
+        try:
+            path.unlink()
+            return True, "已删除文件"
+        except OSError as exc:
+            return False, f"文件被占用（{type(exc).__name__}），重启服务后可删除"
     def _stale_pids(self, exe: Path) -> list[int]:
         """同 exe、同端口的残留 breeze-server。
 

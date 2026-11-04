@@ -61,16 +61,102 @@
         </p>
       </article>
 
-      <details class="card viz" id="viz-card">
-        <summary>
-          <span class="viz-title">模型可视化页面</span>
-          <span class="muted" id="viz-hint">服务未连接</span>
-        </summary>
-        <div class="viz-body">
-          <p class="muted viz-empty" id="viz-empty">服务未连接，启动服务后这里会自动显示模型网页。</p>
-          <iframe id="viz-frame" class="viz-frame" title="Breeze 模型可视化页面" loading="lazy" referrerpolicy="no-referrer" hidden></iframe>
+      <article class="card studio">
+        <div class="card-head">
+          <h2>音色工作台</h2>
+          <span class="muted">本地音色库 · 克隆 · 试听</span>
         </div>
-      </details>
+
+        <!-- 音色库 -->
+        <div class="voice-table-wrap">
+          <table class="voice-table">
+            <thead>
+              <tr>
+                <th style="width: 34%">音色</th>
+                <th style="width: 12%">时长</th>
+                <th>描述</th>
+                <th style="width: 25%"></th>
+              </tr>
+            </thead>
+            <tbody id="voice-body">
+              <tr><td colspan="4" class="muted">正在读取音色…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 克隆 -->
+        <h3 class="sub-head">克隆新音色</h3>
+        <p class="tip">
+          给一段 3~20 秒的干净人声（<strong>只支持 WAV</strong>），填上它说的每一个字，就能生成新音色。
+        </p>
+        <div class="row">
+          <label class="field">
+            <span>参考音频（WAV，≤10 MB）</span>
+            <input type="file" id="clone-file" accept=".wav,audio/wav" />
+          </label>
+          <label class="field">
+            <span>名称（英文 / 数字 / - / _）</span>
+            <input type="text" id="clone-name" placeholder="例如 fish-voice" />
+          </label>
+        </div>
+        <label class="field">
+          <span>这段音频里说的每一个字（必须逐字一致）</span>
+          <textarea id="clone-text" placeholder="例如：海风吹过甲板，我把月亮当成回家的路标。"></textarea>
+        </label>
+        <label class="field">
+          <span>描述（可选，方便以后区分）</span>
+          <input type="text" id="clone-desc" placeholder="例如：温柔、偏慢、略带气声" />
+        </label>
+        <div class="row actions">
+          <button type="button" class="ghost" id="clone-preview-btn">试听参考音频</button>
+          <button type="button" class="primary" id="clone-btn">克隆并保存</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 试听 -->
+        <h3 class="sub-head">试听</h3>
+        <p class="tip">不用去群里发消息，这里直接合成一段听听效果。</p>
+        <label class="field">
+          <span>文本</span>
+          <textarea id="preview-text">海面上的月光很亮，我想和你说一声晚安啦。</textarea>
+        </label>
+        <div class="row">
+          <label class="field">
+            <span>音色</span>
+            <select id="preview-voice"></select>
+          </label>
+          <label class="field">
+            <span>语速</span>
+            <select id="preview-speed">
+              <option value="0">正常</option>
+              <option value="15">稍快</option>
+              <option value="-15">稍慢</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>音高</span>
+            <select id="preview-pitch">
+              <option value="0">0</option>
+              <option value="2">+2</option>
+              <option value="-2">-2</option>
+            </select>
+          </label>
+        </div>
+        <div class="row actions">
+          <button type="button" class="primary" id="preview-btn">合成试听</button>
+        </div>
+        <div class="player" id="player" hidden>
+          <span class="player-icon">▶</span>
+          <audio id="preview-audio" controls></audio>
+        </div>
+
+        <p class="tip studio-foot">
+          需要模型可视化或原始克隆面板？<a href="#" id="native-link">打开 Breeze 原生界面</a>
+        </p>
+      </article>
     </main>
 
     <div class="toast" id="toast" hidden></div>

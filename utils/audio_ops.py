@@ -212,6 +212,23 @@ def _wsola(x, factor: float):
     return out
 
 
+def normalize_wav(wav_bytes: bytes, pad_ms: int = 80) -> bytes | None:
+    """把「流式 WAV」（长度字段 0xFFFFFFFF）重封装成标准 WAV，并在尾部补少量静音。
+
+    Breeze 的 /v1/audio/speech 返回的是流式 WAV：RIFF 与 data 块的长度都写 0xFFFFFFFF。
+    播放器/客户端按这个长度算时长为 4 GB，容易在结尾提前截断（表现为「最后几个字没念完」）。
+    重封装后长度字段正确，客户端也就不会误判；补 80ms 静音还能避免尾音被切。
+    """
+    if not wav_bytes or wav_bytes[:4] != b"RIFF":
+        return None
+    try:
+        samples, sample_rate = _parse_wav(wav_bytes)
+    except (ValueError, struct.error):
+        return None
+    if pad_ms > 0 and samples:
+        samples.extend([0.0] * max(1, int(sample_rate * pad_ms / 1000)))
+    return _build_wav(samples, sample_rate)
+
 def speed_factor(speed_ratio: int) -> float:
     """
     把配置里的 speed_ratio 换算成「时长倍率」（WSOLA 的 factor）。

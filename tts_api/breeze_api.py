@@ -88,6 +88,7 @@ class BreezeTTSClient:
         speed_ratio: int = 0,
         cfg_scale: float | None = None,
         pitch_shift: int = 0,
+        voice: str | None = None,
     ) -> bytes | None:
         """
         合成语音，返回处理后 WAV 的字节；失败返回 None（调用方负责降级）。
@@ -98,7 +99,7 @@ class BreezeTTSClient:
         if not text:
             return None
 
-        wav = await self._request_wav(text, instructions, cfg_scale)
+        wav = await self._request_wav(text, instructions, cfg_scale, voice=voice)
         if wav is None:
             return None
 
@@ -108,10 +109,21 @@ class BreezeTTSClient:
             if processed is not None:
                 wav = processed
 
+        # 关键一步：服务返回的是「流式 WAV」（长度字段 0xFFFFFFFF），
+        # 直接发给客户端会让它把时长算成 4 GB、在结尾截断（「最后几个字没念」）。
+        # 这里重封装成标准 WAV 并补 80ms 静音，保证尾巴完整。
+        fixed = audio_ops.normalize_wav(wav)
+        if fixed is not None:
+            wav = fixed
+
         return wav
 
     async def _request_wav(
-        self, text: str, instructions: str | None, cfg_scale: float | None = None
+        self,
+        text: str,
+        instructions: str | None,
+        cfg_scale: float | None = None,
+        voice: str | None = None,
     ) -> bytes | None:
         """带 409 退避的实际请求"""
         payload = {
@@ -121,8 +133,9 @@ class BreezeTTSClient:
             "cfg_scale": self.cfg_scale if cfg_scale is None else cfg_scale,
             "seed": self.seed,
         }
-        if self.voice:
-            payload["voice"] = self.voice
+        chosen = voice if voice is not None else self.voice
+        if chosen:
+            payload["voice"] = chosen
         if instructions:
             payload["instructions"] = instructions
 
