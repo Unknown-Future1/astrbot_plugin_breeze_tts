@@ -381,6 +381,7 @@ class ServiceManager:
         self._proc = None
         self._log_fh = None
         self._args_cache: tuple[float, dict] = (0.0, {})
+        self._voices_cache: tuple[float, Path | None] = (0.0, None)
 
     # ------------------------------------------------------------ 路径推断
     def clone(self, **overrides) -> "ServiceManager":
@@ -438,27 +439,59 @@ class ServiceManager:
                     return path
         return found[0]
 
+    @staticmethod
+    def _breeze_count(folder: Path) -> int:
+        """目录里有多少个 .breeze（数不出来就当 0）。"""
+        try:
+            return sum(1 for _ in folder.glob("*.breeze"))
+        except OSError:
+            return 0
+
+    def _detect_voices_dir(self, base: Path) -> Path | None:
+        """在 base 及它的一层子目录里，找真正装着 .breeze 的文件夹。
+
+        不猜目录名：谁的目录里有音色文件就认谁；名字恰好是 voices / voice 的优先。
+        """
+        candidates: list[tuple[Path, int]] = []
+        for folder in [base, *[p for p in (base.iterdir() if base.is_dir() else []) if p.is_dir()]]:
+            count = self._breeze_count(folder)
+            if count:
+                candidates.append((folder, count))
+        if not candidates:
+            return None
+        names = {VOICES_DIR_NAME.lower(), LEGACY_VOICES_DIR_NAME.lower()}
+        candidates.sort(
+            key=lambda item: (
+                0 if item[0].name.lower() in names else 1,  # 名字规范优先
+                -item[1],                                     # 其次音色多的
+                len(str(item[0])),
+            )
+        )
+        return candidates[0][0]
+
     def voices_dir(self) -> Path | None:
-        """音色目录：服务在跑就以它实际的 --voices-dir 为准；否则 voices 优先，其次旧 voice。"""
+        """音色目录：服务在跑听它的 --voices-dir；否则按 .breeze 实际所在目录推断。"""
         root = self.root
         if not root:
             return None
-        # 两个目录并存时（例如手动启动过），运行中的服务用哪个才可信
+        # 服务在跑时，它用的目录最可信（可能和我们推断的不一致）
         running = self.running_args().get("--voices-dir")
         if running:
             return Path(running)
-        preferred = root / VOICES_DIR_NAME
-        if _has_breeze(preferred):
-            return preferred
-        legacy = root / LEGACY_VOICES_DIR_NAME
-        if _has_breeze(legacy):
-            return legacy
-        exe = self.exe()
-        if exe:
-            for cand in (exe.parent / VOICES_DIR_NAME, exe.parent / LEGACY_VOICES_DIR_NAME):
-                if _has_breeze(cand):
-                    return cand
-        return preferred
+
+        now = time.monotonic()
+        stamp, cached = self._voices_cache
+        if cached is not None and now - stamp < 10.0:
+            return cached
+
+        detected = self._detect_voices_dir(root)
+        if detected is None:
+            exe = self.exe()
+            if exe:
+                detected = self._detect_voices_dir(exe.parent)
+        result = detected or (root / VOICES_DIR_NAME)
+        self._voices_cache = (now, result)
+        return result
 
     def migrate_voices_dir(self) -> str:
         """（可选，不自动调用）把旧版 <root>/voice 合并到 <root>/voices。
@@ -712,12 +745,14 @@ class ServiceManager:
         """当前在跑的 breeze-server 的 PID（0 = 没在跑）。"""
         if self._proc is not None and self._proc.poll() is None:
             return self._proc.pid
-        pid = int(self._read_state().get("pid") or 0)
-        if pid and _pid_alive(pid) and _looks_like_breeze(pid):
-            return pid
+        # 先看「我们配置的端口现在被谁占着」——它才是当前真正在服务的那个进程；
+        # state 文件可能残留上一次（甚至测试）留下的 pid。
         owner = self.port_owner() or 0
         if owner and _pid_alive(owner) and _looks_like_breeze(owner):
             return owner
+        pid = int(self._read_state().get("pid") or 0)
+        if pid and _pid_alive(pid) and _looks_like_breeze(pid):
+            return pid
         return 0
 
     def status(self) -> dict:
