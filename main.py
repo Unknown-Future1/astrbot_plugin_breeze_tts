@@ -351,17 +351,25 @@ class BreezeTTSPlugin(Star):
             # 本轮走过 clone_tts（保留文字开启时）：按工具文本统一出「文字 + 语音」，内容一致
             tool_text = str(event.get_extra("breeze_tool_text") or "").strip()
             if tool_text:
-                instruction = str(
-                    event.get_extra("breeze_tool_instruction") or ""
-                ).strip() or (self.custom_instruction or self.preset_instruction())
-                cfg = self.cfg_scale if instruction else 1.0
-                wav = await self.client.synth(
-                    text=tool_text,
-                    instructions=instruction or None,
-                    speed_ratio=self.speed_ratio,
-                    pitch_shift=self.pitch_shift,
-                    cfg_scale=cfg,
-                )
+                task = event.get_extra("breeze_tool_task")
+                if task is not None:
+                    try:
+                        wav = await task  # 工具里已经开跑，通常此时刚好拿结果
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(f"[BreezeTTS] 工具后台合成失败：{exc}")
+                        wav = None
+                else:
+                    instruction = str(
+                        event.get_extra("breeze_tool_instruction") or ""
+                    ).strip() or (self.custom_instruction or self.preset_instruction())
+                    cfg = self.cfg_scale if instruction else 1.0
+                    wav = await self.client.synth(
+                        text=tool_text,
+                        instructions=instruction or None,
+                        speed_ratio=self.speed_ratio,
+                        pitch_shift=self.pitch_shift,
+                        cfg_scale=cfg,
+                    )
                 if wav:
                     result.chain = [
                         Comp.Plain(tool_text),
@@ -385,6 +393,10 @@ class BreezeTTSPlugin(Star):
 
             text = "".join(text_parts).strip()
             if not text:
+                return
+            # 「保留文字」关闭时会用零宽字符抹掉文字，这里别再给空内容配音
+            if not text.replace(ZERO_WIDTH, "").strip():
+                logger.debug("[BreezeTTS] 文字已被抹掉（只发语音模式），跳过装饰")
                 return
 
             # 超长直接跳过（不截断，避免念出半句话）
@@ -530,11 +542,24 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
         if not instruction:
             instruction = self.plugin.custom_instruction or self.plugin.preset_instruction()
 
-        # 保留文字：只登记文本与语气，由装饰钩子统一出「文字 + 语音」，避免这里白合成一次
+        # 保留文字：后台先合成（与模型继续生成并行），装饰钩子直接取用，只合成一次
         ev = context.context.event
         if self.plugin.enable_llm_response:
+            cfg = self.plugin.cfg_scale if instruction else 1.0
             ev.set_extra("breeze_tool_text", text)
             ev.set_extra("breeze_tool_instruction", instruction or "")
+            ev.set_extra(
+                "breeze_tool_task",
+                asyncio.create_task(
+                    self.plugin.client.synth(
+                        text=text,
+                        instructions=instruction or None,
+                        speed_ratio=self.plugin.speed_ratio,
+                        pitch_shift=self.plugin.pitch_shift,
+                        cfg_scale=cfg,
+                    )
+                ),
+            )
             return "SUCCESS"
 
         cfg = self.plugin.cfg_scale if instruction else 1.0
