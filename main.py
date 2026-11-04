@@ -269,6 +269,10 @@ class BreezeTTSPlugin(Star):
     def preset_instruction(self) -> str:
         return STYLE_PRESETS.get(self.style_preset, "")
 
+    def style_instruction(self, preset: str) -> str:
+        """按预设 id 取指令文本（页面试听用；没传就回退当前设置）。"""
+        return STYLE_PRESETS.get(preset or self.style_preset, "")
+
     async def _auto_instruction(self, event: AstrMessageEvent, text: str) -> str:
         """调一次 LLM 分析情绪，生成配音指令（失败则返回空）"""
         try:

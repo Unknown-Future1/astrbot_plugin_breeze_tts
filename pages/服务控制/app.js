@@ -5,6 +5,7 @@ const state = {
   voices: [],
   timer: null,
   voicesAt: 0,
+  previewDefaultsApplied: false,
 };
 
 function service() {
@@ -248,7 +249,14 @@ async function preview() {
   btn.disabled = true;
   btn.textContent = "合成中…";
   try {
-    const res = await apiPost("preview", { text, voice_id: voice, speed, pitch });
+    const res = await apiPost("preview", {
+      text,
+      voice_id: voice,
+      speed,
+      pitch,
+      style_preset: $("preview-style").value || "",
+      custom_instruction: $("preview-instruction").value.trim(),
+    });
     if (!res.ok) {
       toast(res.message || "合成失败");
       return;
@@ -355,6 +363,26 @@ function renderStatus(st) {
 
   // 工作台只在服务在线时显示
   $("studio-card").hidden = !st.healthy;
+
+  // 风格预设下拉：选项来自后端，首次加载时套用插件当前设置
+  const styleSelect = $("preview-style");
+  const presets = st.presets || [];
+  if (styleSelect.options.length !== presets.length) {
+    styleSelect.innerHTML = "";
+    presets.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.label;
+      styleSelect.appendChild(opt);
+    });
+  }
+  if (!state.previewDefaultsApplied && st.defaults) {
+    styleSelect.value = st.defaults.style_preset || "normal";
+    if (!$("preview-instruction").value) {
+      $("preview-instruction").value = st.defaults.custom_instruction || "";
+    }
+    state.previewDefaultsApplied = true;
+  }
 
   // 从离线变在线时刷新音色库
   if (st.healthy && state.wasHealthy !== true) loadVoices(true);

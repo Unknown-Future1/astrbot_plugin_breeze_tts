@@ -27,6 +27,8 @@ import re
 import aiohttp
 from quart import jsonify, request
 
+from astrbot.api import logger
+
 MAX_UPLOAD = 10 * 1024 * 1024  # 10 MB：够放 60 秒 24k 单声道 WAV
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -63,6 +65,16 @@ def register_web_apis(plugin) -> None:
         payload = await _run(manager().status)
         # 页面只额外需要「当前音色」；端口/模型/目录在 status() 里已经有了，不再重复回
         payload["config"] = {"voice_id": getattr(plugin, "voice_id", "")}
+        # 试听区要用的风格预设；文案与设置页保持一致
+        payload["presets"] = [
+            {"id": "normal", "label": "自然"},
+            {"id": "gentle", "label": "温柔（稍慢、偏轻）"},
+            {"id": "whisper", "label": "耳语（极慢、很小声）"},
+        ]
+        payload["defaults"] = {
+            "style_preset": getattr(plugin, "style_preset", "normal"),
+            "custom_instruction": getattr(plugin, "custom_instruction", ""),
+        }
         return jsonify(payload)
 
     # ------------------------------------------------------------- 启动/停止
@@ -221,8 +233,8 @@ def register_web_apis(plugin) -> None:
         text = str(body.get("text") or "").strip()
         if not text:
             return jsonify({"ok": False, "message": "先写点要读的内容"}), 400
-        if len(text) > 100:
-            text = text[:100]
+        if len(text) > 60:
+            text = text[:60]
         voice_id = str(body.get("voice_id") or "").strip() or None
         try:
             speed = int(body.get("speed") or 0)
@@ -232,19 +244,35 @@ def register_web_apis(plugin) -> None:
         speed = max(-50, min(100, speed))
         pitch = max(-12, min(12, pitch))
 
-        instruction = plugin.custom_instruction or plugin.preset_instruction()
+        # 语气：自定义指令优先，其次是页面选的风格预设，都没有才用插件当前设置
+        custom = str(body.get("custom_instruction") or "").strip()
+        preset = str(body.get("style_preset") or "").strip()
+        if custom:
+            instruction = custom
+        elif preset:
+            instruction = plugin.style_instruction(preset)
+        else:
+            instruction = plugin.custom_instruction or plugin.preset_instruction()
         cfg = plugin.cfg_scale if instruction else 1.0
-        try:
-            wav = await plugin.client.synth(
-                text,
-                instructions=instruction or None,
-                speed_ratio=speed,
-                cfg_scale=cfg,
-                pitch_shift=pitch,
-                voice=voice_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            return jsonify({"ok": False, "message": f"合成失败：{type(exc).__name__}"}), 500
+        async def do_synth(cfg_value: float) -> bytes | None:
+            try:
+                return await plugin.client.synth(
+                    text,
+                    instructions=instruction or None,
+                    speed_ratio=speed,
+                    cfg_scale=cfg_value,
+                    pitch_shift=pitch,
+                    voice=voice_id,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"[BreezeTTS] 试听合成异常：{exc}")
+                return None
+
+        wav = await do_synth(cfg)
+        if not wav and cfg > 1.0:
+            # 带引导的请求在显卡繁忙时可能超时；退回不带引导再试一次
+            logger.info("[BreezeTTS] 试听超时/失败，改用不带引导的快速模式重试")
+            wav = await do_synth(1.0)
         if not wav:
             return jsonify({"ok": False, "message": "合成失败：服务没返回音频（看服务是否在线）"}), 500
         return jsonify({

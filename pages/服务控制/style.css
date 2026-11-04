@@ -207,6 +207,23 @@ main {
 
 .row.actions {
   margin-top: 14px;
+  justify-content: flex-end;
+}
+
+/* 试听底部：音色下拉占满剩余宽度，按钮跟在右边 */
+.row.actions.preview-actions {
+  justify-content: flex-start;
+  align-items: flex-end;
+}
+
+.preview-actions .voice-pick {
+  flex: 1 1 240px;
+  margin-bottom: 0;
+}
+
+.preview-actions button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 select {

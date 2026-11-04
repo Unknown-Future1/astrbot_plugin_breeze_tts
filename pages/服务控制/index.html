@@ -123,10 +123,14 @@
           <span>文本</span>
           <textarea id="preview-text">海面上的月光很亮，我想和你说一声晚安啦。</textarea>
         </label>
+        <label class="field">
+          <span>自定义语气指令（留空则使用下面的风格预设）</span>
+          <input type="text" id="preview-instruction" placeholder="例如：语速稍慢，语气温柔一点" />
+        </label>
         <div class="row">
           <label class="field">
-            <span>音色</span>
-            <select id="preview-voice"></select>
+            <span>风格预设</span>
+            <select id="preview-style"></select>
           </label>
           <label class="field">
             <span>语速（-50 ~ 100，推荐 ±20 以内）</span>
@@ -137,7 +141,11 @@
             <input type="number" id="preview-pitch" min="-12" max="12" step="1" value="0" />
           </label>
         </div>
-        <div class="row actions">
+        <div class="row actions preview-actions">
+          <label class="field voice-pick">
+            <span>音色</span>
+            <select id="preview-voice"></select>
+          </label>
           <button type="button" class="primary" id="preview-btn">合成试听</button>
         </div>
         <div class="player" id="player" hidden>
