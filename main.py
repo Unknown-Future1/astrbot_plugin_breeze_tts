@@ -530,6 +530,13 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
         if not instruction:
             instruction = self.plugin.custom_instruction or self.plugin.preset_instruction()
 
+        # 保留文字：只登记文本与语气，由装饰钩子统一出「文字 + 语音」，避免这里白合成一次
+        ev = context.context.event
+        if self.plugin.enable_llm_response:
+            ev.set_extra("breeze_tool_text", text)
+            ev.set_extra("breeze_tool_instruction", instruction or "")
+            return "SUCCESS"
+
         cfg = self.plugin.cfg_scale if instruction else 1.0
         wav = await self.plugin.client.synth(
             text=text,
@@ -542,14 +549,6 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
             return self.plugin.fail_reply_text or "语音合成失败"
 
         # chain_result() 是同步方法，返回 MessageEventResult；发送要交给 event.send()
-        ev = context.context.event
-
-        if self.plugin.enable_llm_response:
-            # 保留文字：工具不自己发，交给装饰钩子拼「同一段文字 + 语音」，保证内容一致
-            ev.set_extra("breeze_tool_text", text)
-            ev.set_extra("breeze_tool_instruction", instruction or "")
-            return "SUCCESS"
-
         await ev.send(ev.chain_result([Comp.Record.fromBase64(self.plugin.client.to_base64(wav))]))
         ev.set_extra("breeze_voice_silence_mode", True)
         return "SUCCESS"
