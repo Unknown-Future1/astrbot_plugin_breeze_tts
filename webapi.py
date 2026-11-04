@@ -10,7 +10,6 @@
   voices                  音色库明细（时长/描述/文件是否存在）
   voice_add               克隆新音色（只收 WAV）
   voice_delete            移除音色（内存 + .breeze 文件）
-  voice_update            改描述
   preview                 试听：指定音色合成一小段
 
 设计原则：阻塞操作（起停服务、写文件）扔进线程池，别卡住事件循环；
@@ -260,24 +259,6 @@ def register_web_apis(plugin) -> None:
             "message": f"已移除 {vid}{mem_note}；" + ("文件也删掉了" if removed else f"文件未删（{note}）"),
         })
 
-    async def voice_update():
-        body = await request.get_json(silent=True) or {}
-        vid = str(body.get("id") or "").strip()
-        description = str(body.get("description") or "")
-        if not NAME_RE.match(vid):
-            return jsonify({"ok": False, "message": "音色名不合法"}), 400
-        try:
-            async with session() as s:
-                async with s.patch(
-                    f"{api_base()}/v1/voices/{vid}", json={"description": description}
-                ) as resp:
-                    text = await resp.text()
-                    if resp.status != 200:
-                        return jsonify({"ok": False, "message": f"保存失败：{text[:160]}"}), 400
-        except aiohttp.ClientError as exc:
-            return jsonify({"ok": False, "message": f"连不上本地服务：{type(exc).__name__}"}), 500
-        return jsonify({"ok": True, "message": "描述已保存"})
-
     # ------------------------------------------------------------- 试听
     async def preview():
         body = await request.get_json(silent=True) or {}
@@ -356,5 +337,4 @@ def register_web_apis(plugin) -> None:
     add("voices", voices, ["GET"], "音色库明细")
     add("voice_add", voice_add, ["POST"], "克隆音色（WAV）")
     add("voice_delete", voice_delete, ["POST"], "移除音色")
-    add("voice_update", voice_update, ["POST"], "修改音色描述")
     add("preview", preview, ["POST"], "试听合成")

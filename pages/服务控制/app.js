@@ -110,19 +110,13 @@ function renderVoices(payload) {
     play.dataset.action = "preview";
     play.textContent = "试听";
     play.disabled = !healthy;
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "tiny";
-    edit.dataset.action = "edit";
-    edit.textContent = "编辑";
-    edit.disabled = !healthy;
     const del = document.createElement("button");
     del.type = "button";
     del.className = "tiny danger";
     del.dataset.action = "delete";
     del.textContent = "删除";
     del.disabled = !healthy || v.id === current;
-    actCell.append(play, edit, del);
+    actCell.append(play, del);
 
     tr.append(nameCell, secCell, descCell, actCell);
     tbody.appendChild(tr);
@@ -213,22 +207,6 @@ async function deleteVoice(id) {
   try {
     const res = await apiPost("voice_delete", { id });
     toast(res.message || (res.ok ? "已删除" : "删除失败"));
-  } catch (err) {
-    toast(`出错了：${err.message || err}`);
-  } finally {
-    setBusy(false);
-    await refresh();
-    await loadVoices(true);
-  }
-}
-
-async function editVoice(id, current) {
-  const next = window.prompt(`给「${id}」写个描述（留空则清除）：`, current || "");
-  if (next === null) return;
-  setBusy(true, `正在保存 ${id} 的描述…`);
-  try {
-    const res = await apiPost("voice_update", { id, description: next.trim() });
-    toast(res.message || (res.ok ? "已保存" : "保存失败"));
   } catch (err) {
     toast(`出错了：${err.message || err}`);
   } finally {
@@ -506,8 +484,6 @@ $("voice-body").addEventListener("click", (e) => {
   if (btn.dataset.action === "preview") {
     $("preview-voice").value = id;
     preview();
-  } else if (btn.dataset.action === "edit") {
-    editVoice(id, voice.description || "");
   } else if (btn.dataset.action === "delete") {
     deleteVoice(id);
   }
