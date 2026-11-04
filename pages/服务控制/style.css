@@ -437,7 +437,8 @@ button.tiny {
 }
 
 textarea,
-input[type="text"] {
+input[type="text"],
+input[type="number"] {
   width: 100%;
   background: #131a29;
   color: var(--text);
@@ -456,6 +457,7 @@ textarea {
 
 textarea:focus,
 input[type="text"]:focus,
+input[type="number"]:focus,
 input[type="file"]:focus {
   border-color: var(--brand);
 }

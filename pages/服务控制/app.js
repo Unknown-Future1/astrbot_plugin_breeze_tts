@@ -241,8 +241,8 @@ async function preview() {
   const text = $("preview-text").value.trim();
   if (!text) return toast("先写点要读的内容");
   const voice = $("preview-voice").value || "";
-  const speed = Number($("preview-speed").value || 0);
-  const pitch = Number($("preview-pitch").value || 0);
+  const speed = Math.max(-50, Math.min(100, Number($("preview-speed").value || 0)));
+  const pitch = Math.max(-12, Math.min(12, Number($("preview-pitch").value || 0)));
 
   const btn = $("preview-btn");
   btn.disabled = true;
@@ -352,6 +352,9 @@ function renderStatus(st) {
   const url = st.webui || st.api || "";
   native.dataset.url = url;
   native.hidden = !url;
+
+  // 工作台只在服务在线时显示
+  $("studio-card").hidden = !st.healthy;
 
   // 从离线变在线时刷新音色库
   if (st.healthy && state.wasHealthy !== true) loadVoices(true);

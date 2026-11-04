@@ -61,7 +61,7 @@
         </p>
       </article>
 
-      <article class="card studio">
+      <article class="card studio" id="studio-card" hidden>
         <div class="card-head">
           <h2>音色工作台</h2>
           <span class="muted">本地音色库 · 克隆 · 试听</span>
@@ -129,20 +129,12 @@
             <select id="preview-voice"></select>
           </label>
           <label class="field">
-            <span>语速</span>
-            <select id="preview-speed">
-              <option value="0">正常</option>
-              <option value="15">稍快</option>
-              <option value="-15">稍慢</option>
-            </select>
+            <span>语速（-50 ~ 100，推荐 ±20 以内）</span>
+            <input type="number" id="preview-speed" min="-50" max="100" step="5" value="0" />
           </label>
           <label class="field">
-            <span>音高</span>
-            <select id="preview-pitch">
-              <option value="0">0</option>
-              <option value="2">+2</option>
-              <option value="-2">-2</option>
-            </select>
+            <span>音调（-12 ~ +12 半音，推荐 ±4 以内）</span>
+            <input type="number" id="preview-pitch" min="-12" max="12" step="1" value="0" />
           </label>
         </div>
         <div class="row actions">
