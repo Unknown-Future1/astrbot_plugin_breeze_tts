@@ -375,6 +375,19 @@ body.busy button {
 
   /* ---------------------------------------------------------- 音色工作台 */
 
+/* 工作台内部：小标题 / 说明 / 字段之间留出呼吸，别挤在一起 */
+.card.studio .sub-head {
+  margin: 0 0 9px;
+}
+
+.card.studio p.tip {
+  margin: 0 0 20px;
+}
+
+.card.studio p.tip.studio-foot {
+  margin: 20px 0 0;
+}
+
 .card.studio {
   margin-top: 16px;
 }
