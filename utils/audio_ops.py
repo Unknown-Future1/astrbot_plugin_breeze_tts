@@ -212,7 +212,7 @@ def _wsola(x, factor: float):
     return out
 
 
-def normalize_wav(wav_bytes: bytes, pad_ms: int = 80) -> bytes | None:
+def normalize_wav(wav_bytes: bytes, pad_ms: int = 80, lead_ms: int = 250) -> bytes | None:
     """把「流式 WAV」（长度字段 0xFFFFFFFF）重封装成标准 WAV，并在尾部补少量静音。
 
     Breeze 的 /v1/audio/speech 返回的是流式 WAV：RIFF 与 data 块的长度都写 0xFFFFFFFF。
@@ -225,6 +225,10 @@ def normalize_wav(wav_bytes: bytes, pad_ms: int = 80) -> bytes | None:
         samples, sample_rate = _parse_wav(wav_bytes)
     except (ValueError, struct.error):
         return None
+    # 句首补静音：QQ 语音首次播放要下载/解码，播放器预热容易吃掉开头几个字，
+    # 留一段空白让缓冲消耗在静音上（重播时本来就没问题，说明内容一直是完整的）
+    if lead_ms > 0 and samples:
+        samples[:0] = [0.0] * max(1, int(sample_rate * lead_ms / 1000))
     if pad_ms > 0 and samples:
         samples.extend([0.0] * max(1, int(sample_rate * pad_ms / 1000)))
     return _build_wav(samples, sample_rate)
