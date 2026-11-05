@@ -5,7 +5,7 @@
   支持克隆音色、语速与音调调节，<strong>无需任何 API Key、不按字计费、不依赖外网</strong>。
 </p>
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.3.2-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-1.3.3-blue" alt="version" />
   <img src="https://img.shields.io/badge/AstrBot-%E2%89%A5%204.29.3-orange" alt="astrbot" />
   <img src="https://img.shields.io/badge/backend-Breeze%20TTS%202-4f9cf9" alt="backend" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
