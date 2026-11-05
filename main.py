@@ -25,7 +25,7 @@ from pydantic.dataclasses import dataclass
 import astrbot.api.message_components as Comp
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.star import Context, Star, register
+from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.core.agent.run_context import ContextWrapper
 from astrbot.core.agent.tool import FunctionTool, ToolExecResult
 from astrbot.core.astr_agent_context import AstrAgentContext
@@ -154,12 +154,18 @@ class BreezeTTSPlugin(Star):
         self.service_parallel = _as_int(cfg.get("service_parallel", 4), 4, 1, 16)
         self.auto_start_service = _as_bool(cfg.get("auto_start_service", True), True)
         self._auto_start_task = None
+        # 持久化数据按 AstrBot 规范放 data/plugin_data/<插件名>；拿不到就退回插件目录
+        try:
+            data_dir = str(StarTools.get_data_dir(str(getattr(self, "name", "") or "") or None))
+        except Exception:  # noqa: BLE001
+            data_dir = ""
         self.service = ServiceManager(
             plugin_dir=os.path.dirname(os.path.abspath(__file__)),
             model_dir=self.model_dir,
             model_file=self.model_file,
             port=self.service_port,
             parallel=self.service_parallel,
+            data_dir=data_dir,
         )
 
         # ---- 客户端 ----

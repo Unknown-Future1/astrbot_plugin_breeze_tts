@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import ctypes
 import json
-import logging
 import os
 import re
 import shutil
@@ -29,7 +28,14 @@ import urllib.request
 from pathlib import Path
 
 IS_WINDOWS = os.name == "nt"
-logger = logging.getLogger("astrbot_plugin_breeze_tts.launcher")
+
+# 插件里统一用 AstrBot 的 logger；单独跑脚本（无 astrbot 环境）时才回退到内置 logging
+try:
+    from astrbot.api import logger
+except Exception:  # noqa: BLE001
+    import logging
+
+    logger = logging.getLogger("astrbot_plugin_breeze_tts.launcher")
 
 # 子进程标志：不弹控制台窗口；独立进程组，Ctrl+C 不会连带杀掉
 CREATE_NO_WINDOW = 0x08000000
@@ -367,12 +373,23 @@ class ServiceManager:
         port: int = DEFAULT_PORT,
         parallel: int = DEFAULT_PARALLEL,
         webui: bool = True,
+        data_dir: str = "",
     ):
         self.plugin_dir = Path(plugin_dir).resolve(strict=False)
-        self.runtime_dir = self.plugin_dir / "runtime"
+        # 持久化数据放 data/plugin_data/<插件名>（AstrBot 规范）；没传就退回插件目录，便于单独跑脚本
+        base = Path(data_dir).resolve(strict=False) if data_dir else self.plugin_dir
+        self.runtime_dir = base / "runtime"
         self.log_dir = self.runtime_dir / "logs"
         self.log_file = self.log_dir / "server.log"
         self.state_file = self.runtime_dir / "service.json"
+        # 旧位置的状态文件（插件目录下）在首次启动时迁过来，避免丢掉正在跑的服务 pid
+        legacy_state = self.plugin_dir / "runtime" / "service.json"
+        try:
+            if legacy_state.exists() and not self.state_file.exists():
+                self.runtime_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(legacy_state, self.state_file)
+        except OSError:
+            pass
 
         self.model_dir = _clean_path(model_dir)
         self.model_file = _clean_path(model_file)

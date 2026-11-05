@@ -157,6 +157,7 @@ AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控
 > - **模型目录、模型文件、服务端口、自动拉起**都在「插件设置」里，页面上不重复放输入框
 > - 关掉「启用插件时自动拉起服务」后，重启 AstrBot 不会再拉起模型（把显存留给别的事）
 > - 音色保存在「模型目录」下的音色文件夹里（`voices`，或已有的 `voice`），重启服务后自动加载
+> - 服务的运行状态与日志保存在 `data/plugin_data/astrbot_plugin_breeze_tts/runtime/`（重装插件不会丢）
 > - 想用脚本手动起停（不经过面板）：见 [`scripts/README.md`](scripts/README.md)
 
 ---
