@@ -399,11 +399,3 @@ def process(wav_bytes: bytes, speed_ratio: int = 0,
         return wav_bytes
 
 
-def describe_effects(speed_ratio: int = 0, pitch_shift: int = 0) -> str:
-    """给日志/自检用：把当前配置翻译成一句话。"""
-    parts = []
-    if speed_ratio:
-        parts.append(f"语速×{1.0 / speed_factor(speed_ratio):.2f}")
-    if pitch_shift:
-        parts.append(f"音调{pitch_shift:+d}半音")
-    return "、".join(parts) if parts else "无后处理"

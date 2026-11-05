@@ -333,16 +333,6 @@ def find_models(root: Path | None, max_depth: int = _SEARCH_DEPTH) -> list[Path]
     return [item[2] for item in found]
 
 
-def _has_breeze(folder: Path) -> bool:
-    """目录里有没有 *.breeze 音色文件。"""
-    if not _isdir(folder):
-        return False
-    try:
-        return any(folder.glob("*.breeze"))
-    except OSError:
-        return False
-
-
 def _human_size(num: int) -> str:
     gb = num / (1024**3)
     if gb >= 1:
@@ -403,19 +393,6 @@ class ServiceManager:
         self._voices_cache: tuple[float, Path | None] = (0.0, None)
 
     # ------------------------------------------------------------ 路径推断
-    def clone(self, **overrides) -> "ServiceManager":
-        """复制一个管理器（设置页拿未保存的目录做「检查」时用）。"""
-        data = {
-            "plugin_dir": self.plugin_dir,
-            "model_dir": self.model_dir,
-            "model_file": self.model_file,
-            "port": self.port,
-            "parallel": self.parallel,
-            "webui": self.webui,
-        }
-        data.update(overrides)
-        return ServiceManager(**data)
-
     @property
     def root(self) -> Path | None:
         path = _norm(self.model_dir)
@@ -513,50 +490,6 @@ class ServiceManager:
         result = detected or (root / VOICES_DIR_NAME)
         self._voices_cache = (now, result)
         return result
-
-    def migrate_voices_dir(self) -> str:
-        """（可选，不自动调用）把旧版 <root>/voice 合并到 <root>/voices。
-
-        - 新目录没有同名文件 → 直接搬
-        - 有同名文件 → 把旧的改名为 <name>.legacy.breeze 再搬，绝不覆盖
-        - 旧目录搬空后删掉
-        """
-        root = self.root
-        if not root:
-            return ""
-        new = root / VOICES_DIR_NAME
-        old = root / LEGACY_VOICES_DIR_NAME
-        if not old.is_dir():
-            return ""
-        try:
-            new.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            return ""
-        moved = renamed = 0
-        for item in list(old.glob("*.breeze")):
-            target = new / item.name
-            try:
-                if target.exists():
-                    stem = item.stem
-                    target = new / f"{stem}.legacy.breeze"
-                    n = 2
-                    while target.exists():
-                        target = new / f"{stem}.legacy{n}.breeze"
-                        n += 1
-                    renamed += 1
-                shutil.move(str(item), str(target))
-                moved += 1
-            except OSError:
-                continue
-        try:
-            if not any(old.iterdir()):
-                old.rmdir()
-        except OSError:
-            pass
-        if not moved:
-            return ""
-        extra = f"，其中 {renamed} 个同名改名为 .legacy" if renamed else ""
-        return f"已把音色目录合并到 {new}（{moved} 个{extra}）"
 
     def voices(self) -> list[dict]:
         ok, data = self._get_json("/v1/voices")
