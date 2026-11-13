@@ -40,6 +40,31 @@ from .webapi import register_web_apis
 
 ZERO_WIDTH = "\u200b"
 
+USAGE_TTS = (
+    "用法：\n"
+    "· /tts 要念的内容        （不写语气，自动分析情绪）\n"
+    "· /tts [温柔一点]要念的内容\n"
+    "· /tts 温柔一点|要念的内容 （正文里别带竖线）"
+)
+
+# 两种语气写法：[语气] 正文  或  语气|正文
+_STYLE_BRACKET = re.compile(r"^\s*\[([^\[\]]{1,60})\]\s*(.+)$", re.S)
+_STYLE_PIPE = re.compile(r"^\s*([^|\n]{1,60}?)\s*\|\s*(.+)$", re.S)
+
+
+def split_style_prefix(raw: str) -> tuple[str, str]:
+    """从 /tts 参数里拆出（正文, 语气）。没有语气时返回 (raw, "")。"""
+    text = (raw or "").strip()
+    for pattern in (_STYLE_BRACKET, _STYLE_PIPE):
+        match = pattern.match(text)
+        if match:
+            style = match.group(1).strip()
+            body = match.group(2).strip()
+            if body:
+                return body, style
+    return text, ""
+
+
 # 三档静态风格预设（提示词实测：只能更慢/更轻，做不到更快/更响）
 STYLE_PRESETS = {
     "normal": "",
@@ -113,14 +138,12 @@ class BreezeTTSPlugin(Star):
         cfg = config
         self.config = config
 
-        # ---- 开关与触发 ----
         self.enable_tts = _as_bool(cfg.get("enable_tts", True), True)
         self.tts_probability = _as_int(cfg.get("tts_probability", 80), 80, 0, 100)
         self.min_length = _as_int(cfg.get("min_length", 5), 5, 1, 1000)
         self.max_length = _as_int(cfg.get("max_length", 50), 50, 1, 5000)
         self.blocked_words = [str(w) for w in (cfg.get("blocked_words") or []) if str(w).strip()]
 
-        # ---- 服务与音色 ----
         # 服务地址只由「服务端口」决定（127.0.0.1:端口），连接/启动/探测共用
         self.service_port = _as_int(cfg.get("service_port", 9000), 9000, 1, 65535)
         self.breeze_api = f"http://127.0.0.1:{self.service_port}"
@@ -129,28 +152,23 @@ class BreezeTTSPlugin(Star):
         self.seed = _as_int(cfg.get("seed", 42), 42, 0, 2**31 - 1)
         self.timeout = _as_int(cfg.get("timeout", 30), 30, 5, 300)
 
-        # ---- 语气指令 ----
         self.enable_auto_instruction = _as_bool(cfg.get("enable_auto_instruction", True), True)
         self.llm_recognition = str(cfg.get("llm_recognition") or "").strip()
         self.style_preset = str(cfg.get("style_preset") or "normal").strip() or "normal"
         self.custom_instruction = str(cfg.get("custom_instruction") or "").strip()
 
-        # ---- 数值控制 ----
         self.speed_ratio = _as_int(cfg.get("speed_ratio", 0), 0, -50, 100)
         self.pitch_shift = _as_int(cfg.get("pitch_shift", 0), 0, -12, 12)
 
-        # ---- LLM 工具与文字抑制 ----
         self.enable_tts_tool_minmax = _as_bool(cfg.get("enable_tts_tool_minmax", True), True)
         self.enable_llm_response = _as_bool(cfg.get("enable_llm_response", False), False)
 
-        # ---- /tts 指令与失败兜底 ----
         self.enable_tts_command = _as_bool(cfg.get("enable_tts_command", True), True)
         self.fail_reply_text = str(cfg.get("fail_reply_text") or "").strip()
 
         # ---- 本地服务（模型目录 / 起停控制）----
         self.model_dir = str(cfg.get("model_dir") or "").strip()
         self.model_file = str(cfg.get("model_file") or "").strip()
-        # 并发槽位不再是设置项：默认 4（老配置里手填过的值仍然尊重）
         self.service_parallel = _as_int(cfg.get("service_parallel", 4), 4, 1, 16)
         self.auto_start_service = _as_bool(cfg.get("auto_start_service", True), True)
         self._auto_start_task = None
@@ -168,7 +186,6 @@ class BreezeTTSPlugin(Star):
             data_dir=data_dir,
         )
 
-        # ---- 客户端 ----
         self.client = BreezeTTSClient(
             api_base=self.breeze_api,
             voice=self.voice_id,
@@ -177,7 +194,6 @@ class BreezeTTSPlugin(Star):
             timeout=self.timeout,
         )
 
-        # ---- 启动自检（只记日志，不阻塞）----
         if not audio_ops._HAS_NUMPY and (self.speed_ratio or self.pitch_shift):
             logger.warning("[BreezeTTS] 环境缺少 numpy，语速/音调后处理将不生效")
 
@@ -192,7 +208,6 @@ class BreezeTTSPlugin(Star):
 
     async def initialize(self):
         """插件启用时：按配置的端口检查服务，并识别音色"""
-        # ---- ① 服务连通性：直接连「服务端口」，不再四处探测 ----
         ok = await self.client.health()
         if not ok:
             logger.warning(
@@ -205,7 +220,6 @@ class BreezeTTSPlugin(Star):
                 self._auto_start_task = asyncio.create_task(self._auto_start_service())
             return
 
-        # ---- ② 音色：没填就用服务端第一个 ----
         await self._refresh_voice()
 
         logger.info(f"[BreezeTTS] 已启用，服务在线：{self.breeze_api}，音色：{self.voice_id or '（未识别）'}")
@@ -261,7 +275,6 @@ class BreezeTTSPlugin(Star):
         # 需要停服务请用「服务控制」页的按钮。
         logger.info("[BreezeTTS] 插件已停用/卸载（本地服务保持运行，可在服务控制页手动停止）")
 
-    # ------------------------------------------------------------------ 工具
     def probability(self, percent: float) -> bool:
         p = max(0.0, min(100.0, float(percent)))
         return random.random() < (p / 100)
@@ -271,6 +284,10 @@ class BreezeTTSPlugin(Star):
             return False
         low = text.lower()
         return any(w.lower() in low for w in self.blocked_words)
+
+    def cfg_for(self, instruction: str) -> float:
+        """有语气指令时用配置的引导强度，没有时用 1.0 换速度。"""
+        return self.cfg_scale if instruction else 1.0
 
     def preset_instruction(self) -> str:
         return STYLE_PRESETS.get(self.style_preset, "")
@@ -314,8 +331,17 @@ class BreezeTTSPlugin(Star):
                 return auto
         return self.preset_instruction()
 
-    async def synthesize(self, event: AstrMessageEvent, text: str) -> str | None:
-        """生成语音，返回 base64 字符串；失败返回 None（调用方降级）"""
+    async def synthesize(
+        self,
+        event: AstrMessageEvent,
+        text: str,
+        instruction_override: str = "",
+    ) -> str | None:
+        """生成语音，返回 base64 字符串；失败返回 None（调用方降级）。
+
+        instruction_override 非空时优先使用（/tts 指令手写的语气），
+        否则按「手写配置 > LLM 自动分析 > 静态预设」解析。
+        """
         # 惰性兜底：插件启用时服务可能还没起来，那时没识别到音色；
         # 这里再试一次，避免必须重载插件才能出声。
         if not self.voice_id:
@@ -327,22 +353,24 @@ class BreezeTTSPlugin(Star):
             except Exception:  # noqa: BLE001
                 pass
 
-        instruction = await self.resolve_instruction(event, text)
-        # 没有指令时用 cfg=1 换速度；有指令时用配置值（默认 2.0）
-        cfg = self.cfg_scale if instruction else 1.0
-
+        override = str(instruction_override or "").strip()
+        instruction = (
+            override if override else await self.resolve_instruction(event, text)
+        )
+        logger.info(
+            f"[BreezeTTS] 语气指令：{instruction or '（无）'} | 文本：{text[:30]}"
+        )
         wav = await self.client.synth(
             text=text,
             instructions=instruction or None,
             speed_ratio=self.speed_ratio,
             pitch_shift=self.pitch_shift,
-            cfg_scale=cfg,
+            cfg_scale=self.cfg_for(instruction),
         )
         if not wav:
             return None
         return self.client.to_base64(wav)
 
-    # ------------------------------------------------------- 核心钩子：装饰结果
     @filter.on_decorating_result()
     async def on_decorating_result(self, event: AstrMessageEvent):
         try:
@@ -368,13 +396,12 @@ class BreezeTTSPlugin(Star):
                     instruction = str(
                         event.get_extra("breeze_tool_instruction") or ""
                     ).strip() or (self.custom_instruction or self.preset_instruction())
-                    cfg = self.cfg_scale if instruction else 1.0
                     wav = await self.client.synth(
                         text=tool_text,
                         instructions=instruction or None,
                         speed_ratio=self.speed_ratio,
                         pitch_shift=self.pitch_shift,
-                        cfg_scale=cfg,
+                        cfg_scale=self.cfg_for(instruction),
                     )
                 if wav:
                     result.chain = [
@@ -390,14 +417,9 @@ class BreezeTTSPlugin(Star):
             if not result.is_llm_result():
                 return
 
-            text_parts = [
-                c.text for c in result.chain if hasattr(c, "text") and c.text
-            ]
-            if not text_parts:
-                logger.debug("[BreezeTTS] 无文本，跳过")
-                return
-
-            text = "".join(text_parts).strip()
+            text = "".join(
+                c.text for c in result.chain if getattr(c, "text", "")
+            ).strip()
             if not text:
                 return
             # 「保留文字」关闭时会用零宽字符抹掉文字，这里别再给空内容配音
@@ -437,33 +459,29 @@ class BreezeTTSPlugin(Star):
                         logger.debug(f"[BreezeTTS] 追加失败提示出错：{exc}")
                 return
 
-            result2 = event.get_result()
-            if result2 is None:
-                logger.warning("[BreezeTTS] 合成完成但 result 已失效，跳过")
-                return
-
             record = Comp.Record.fromBase64(audio_b64)
             if self.enable_llm_response:
-                # 文字 + 语音都发：把语音追加到原消息链后面
-                result2.chain.append(record)
+                result.chain.append(record)
             else:
-                # 只发语音：整条链替换，文字自然就没了
-                #（注意：这条路径不需要 voice_silence_mode，替换链已经足够）
-                result2.chain = [record]
+                result.chain = [record]
 
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[BreezeTTS] on_decorating_result 异常：{exc}")
 
-    # ------------------------------------------------------------ /tts 指令
     @filter.command("tts")
     async def cmd_tts(self, event: AstrMessageEvent, text: GreedyStr):
         """把一段文字念成语音：/tts 你好呀"""
         if not self.enable_tts_command:
             return
 
-        content = str(text or "").strip()
+        raw = str(text or "").strip()
+        if not raw:
+            yield event.plain_result(USAGE_TTS)
+            return
+
+        content, style = split_style_prefix(raw)
         if not content:
-            yield event.plain_result("用法：/tts 要念的内容")
+            yield event.plain_result(USAGE_TTS)
             return
 
         if self.hit_blocked(content):
@@ -476,8 +494,11 @@ class BreezeTTSPlugin(Star):
             )
             return
 
-        logger.info(f"[BreezeTTS] /tts 手工合成：{content[:30]}")
-        audio_b64 = await self.synthesize(event, content)
+        logger.info(
+            f"[BreezeTTS] /tts 手工合成：{content[:30]}"
+            f" | 手写语气：{style or '（走自动分析）'}"
+        )
+        audio_b64 = await self.synthesize(event, content, instruction_override=style)
         if not audio_b64:
             logger.warning("[BreezeTTS] /tts 合成失败")
             yield event.plain_result(self.fail_reply_text or "（刚刚嗓子有点干,没说出话…稍后再试）")
@@ -485,7 +506,6 @@ class BreezeTTSPlugin(Star):
 
         yield event.chain_result([Comp.Record.fromBase64(audio_b64)])
 
-    # ------------------------------------------------ 钩子：抹掉重复的文字
     @filter.on_llm_response()
     async def handle_silence(self, event: AstrMessageEvent, resp: LLMResponse):
         if not event.get_extra("breeze_voice_silence_mode"):
@@ -532,9 +552,9 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
     async def call(
         self, context: ContextWrapper[AstrAgentContext], **kwargs
     ) -> ToolExecResult:
-        text = str(kwargs.get("text") or "").strip()
         if not self.plugin:
             return "插件未正确初始化"
+        text = str(kwargs.get("text") or "").strip()
         if not text:
             return "文本不能为空"
 
@@ -548,10 +568,10 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
         if not instruction:
             instruction = self.plugin.custom_instruction or self.plugin.preset_instruction()
 
-        # 保留文字：后台先合成（与模型继续生成并行），装饰钩子直接取用，只合成一次
         ev = context.context.event
+        cfg = self.plugin.cfg_for(instruction)
         if self.plugin.enable_llm_response:
-            cfg = self.plugin.cfg_scale if instruction else 1.0
+            # 后台先合成，装饰钩子直接取用，只合成一次
             ev.set_extra("breeze_tool_text", text)
             ev.set_extra("breeze_tool_instruction", instruction or "")
             ev.set_extra(
@@ -568,7 +588,6 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
             )
             return "SUCCESS"
 
-        cfg = self.plugin.cfg_scale if instruction else 1.0
         wav = await self.plugin.client.synth(
             text=text,
             instructions=instruction or None,
@@ -579,7 +598,7 @@ class BreezeTTSTool(FunctionTool[AstrAgentContext]):
         if not wav:
             return self.plugin.fail_reply_text or "语音合成失败"
 
-        # chain_result() 是同步方法，返回 MessageEventResult；发送要交给 event.send()
+        # chain_result() 是同步方法，实际发送交给 event.send()
         await ev.send(ev.chain_result([Comp.Record.fromBase64(self.plugin.client.to_base64(wav))]))
         ev.set_extra("breeze_voice_silence_mode", True)
         return "SUCCESS"
