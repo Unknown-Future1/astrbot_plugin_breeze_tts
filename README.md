@@ -197,9 +197,9 @@ AstrBot 面板 → 插件 → **Breeze TTS 克隆语音** → 页面「服务控
 
 ![QQ 里 /tts 的实际效果](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@4061292250eec9661a6e0fe0b9489f003339f837/docs/tts-effect.png)
 
-![方括号写法的 /tts](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@f7ae45b/docs/tts-style-bracket.png)
+![方括号写法的 /tts](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@b8d9517/docs/tts-style-bracket.png)
 
-![竖线写法的 /tts](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@f7ae45b/docs/tts-style-pipe.png)
+![竖线写法的 /tts](https://gcore.jsdelivr.net/gh/Unknown-Future1/astrbot_plugin_breeze_tts@b8d9517/docs/tts-style-pipe.png)
 
 ---
 
