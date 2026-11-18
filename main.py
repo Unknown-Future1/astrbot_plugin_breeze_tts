@@ -53,6 +53,8 @@ QUANT_VRAM_MB = {
 }
 DEFAULT_VRAM_NEED_MB = 3420  # 识别不出时按 Q8_0 估
 TTS_VRAM_MARGIN_MB = 512
+# 提交内存低于这个值就拒绝启动（防止把系统顶死）
+COMMIT_SAFE_MB = 1536
 # 服务本身还占约 3.8 GB 内存，留 512 余量
 QUANT_RAM_MB = {
     "f16": 6500,
@@ -553,6 +555,32 @@ class BreezeTTSPlugin(Star):
                 return need
         return DEFAULT_RAM_NEED_MB
 
+    def free_commit_mb(self) -> int | None:
+        """读系统提交余量（MB）；读不到返回 None。"""
+        try:
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            status = MEMORYSTATUSEX()
+            status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+                return None
+            return int(status.ullAvailPageFile // (1024 * 1024))
+        except Exception:  # noqa: BLE001
+            return None
+
     def free_ram_mb(self) -> int | None:
         """读系统可用内存（物理与提交余量取小），读不到返回 None。"""
         try:
@@ -616,6 +644,13 @@ class BreezeTTSPlugin(Star):
 
         free_mb = await loop.run_in_executor(None, self.free_vram_mb)
         free_ram = await loop.run_in_executor(None, self.free_ram_mb)
+        free_commit = await loop.run_in_executor(None, self.free_commit_mb)
+        if free_commit is not None and free_commit < COMMIT_SAFE_MB:
+            logger.warning(
+                f"[BreezeTTS] 提交内存只剩 {free_commit} MB（低于 {COMMIT_SAFE_MB} MB），"
+                f"跳过本次语音，避免把系统顶死"
+            )
+            return False
         waited = 0
         while (
             (free_mb is not None and free_mb < need_mb)
