@@ -369,6 +369,13 @@ class BreezeTTSPlugin(Star):
             need_r = self.ram_need_mb()
             free_v = await loop.run_in_executor(None, self.free_vram_mb)
             free_r = await loop.run_in_executor(None, self.free_ram_mb)
+            free_commit = await loop.run_in_executor(None, self.free_commit_mb)
+            if free_commit is not None and free_commit < COMMIT_SAFE_MB:
+                logger.warning(
+                    f"[BreezeTTS] 提交内存只剩 {free_commit} MB（低于 {COMMIT_SAFE_MB} MB），"
+                    f"暂不自动启动"
+                )
+                return
             if (free_v is not None and free_v < need_v) or (
                 free_r is not None and free_r < need_r
             ):
