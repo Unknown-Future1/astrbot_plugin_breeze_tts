@@ -258,7 +258,7 @@ class BreezeTTSPlugin(Star):
         self.split_gap_ms = _as_int(_group_get(cfg, "split_gap_ms", 350), 350, 0, 2000)
         self.split_parallel = _as_bool(_group_get(cfg, "split_parallel", True), True)
         self.auto_start_service = _as_bool(cfg.get("auto_start_service", True), True)
-        self.preload_on_load = _as_bool(cfg.get("preload_on_load", False), False)
+        self.preload_on_load = _as_bool(cfg.get("preload_on_load", True), True)
         self._auto_start_task = None
         # 持久化数据按 AstrBot 规范放 data/plugin_data/<插件名>；拿不到就退回插件目录
         try:
@@ -312,19 +312,18 @@ class BreezeTTSPlugin(Star):
         self._schedule_idle_stop()
         ok = await self.client.health()
         if not ok:
-            if self.auto_start_service:
-                logger.info("[BreezeTTS] 服务离线（可能处于空闲休眠），正在自动拉起…")
+            if self.auto_start_service and self.preload_on_load:
+                logger.info("[BreezeTTS] 服务离线，正在预加载…")
+                # 保留引用，防止任务被垃圾回收（asyncio 只持弱引用）
+                self._auto_start_task = asyncio.create_task(self._auto_start_service())
+            elif self.auto_start_service:
+                logger.info("[BreezeTTS] 服务离线（启动时不预加载，首条语音再拉起）")
             else:
                 logger.warning(
                     f"[BreezeTTS] 已启用，但连不上服务 {self.breeze_api}"
                     "（确认服务确实跑在这个端口，可在「服务端口」里改；"
                     "或到「服务控制」页点一下启动）；语音会静默跳过，文本回复不受影响"
                 )
-            if self.auto_start_service and self.preload_on_load:
-                # 保留引用，防止任务被垃圾回收（asyncio 只持弱引用）
-                self._auto_start_task = asyncio.create_task(self._auto_start_service())
-            elif self.auto_start_service:
-                logger.info("[BreezeTTS] 启动时不预加载，首条语音请求再拉起")
             return
 
         await self._refresh_voice()

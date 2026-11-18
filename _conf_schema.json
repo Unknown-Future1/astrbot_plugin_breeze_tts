@@ -37,9 +37,9 @@
   },
   "preload_on_load": {
     "type": "bool",
-    "description": "启动 AstrBot 时预加载服务",
-    "hint": "默认关闭：不占内存，首条语音再拉起（约 3 秒）。开启后每次启动都会加载模型。",
-    "default": false
+    "description": "启动 AstrBot 时预加载服务（推荐开启）",
+    "hint": "开启后首条语音更快；单实例锁保证只会拉起一个服务。关闭则启动不占内存，首条语音多等约 3 秒。",
+    "default": true
   },
   "idle_stop_minutes": {
     "type": "int",
