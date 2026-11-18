@@ -35,6 +35,12 @@
     "default": true,
     "hint": "默认开启,且自动休眠服务依赖于此选项开启"
   },
+  "preload_on_load": {
+    "type": "bool",
+    "description": "启动 AstrBot 时预加载服务",
+    "hint": "默认关闭：不占内存，首条语音再拉起（约 3 秒）。开启后每次启动都会加载模型。",
+    "default": false
+  },
   "idle_stop_minutes": {
     "type": "int",
     "description": "自动休眠服务（分钟）",

@@ -767,10 +767,64 @@ class ServiceManager:
         self._log_fh = open(self.log_file, "ab", buffering=0)  # noqa: SIM115
         return self._log_fh
 
+    def _lock_file(self):
+        try:
+            self.runtime_dir.mkdir(parents=True, exist_ok=True)
+            return self.runtime_dir / "service.start.lock"
+        except OSError:
+            return None
+
+    def _acquire_start_lock(self):
+        """跨进程互斥：拿不到说明另一个进程正在启动。"""
+        path = self._lock_file()
+        if path is None:
+            return None
+        try:
+            fh = open(path, "a+b")
+            fh.seek(0)
+            import msvcrt
+
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            return fh
+        except OSError:
+            try:
+                fh.close()
+            except Exception:  # noqa: BLE001
+                pass
+            return None
+
+    def _release_start_lock(self, fh) -> None:
+        try:
+            fh.seek(0)
+            import msvcrt
+
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+        finally:
+            fh.close()
+
     def start(self, model_hint: str = "", wait: float = 25.0) -> dict:
-        # 串行执行：并发启动（页面双击 + 自动拉起）时不会叠出两个实例
         with _START_LOCK:
-            return self._start_locked(model_hint, wait)
+            lock = self._acquire_start_lock()
+            if lock is None:
+                # 另一个进程正在启动：等它就绪，不重复拉起
+                deadline = time.monotonic() + max(5.0, wait)
+                while time.monotonic() < deadline and not self.health(timeout=0.5)[0]:
+                    time.sleep(0.5)
+                if self.health(timeout=1.0)[0]:
+                    return {
+                        "ok": True,
+                        "ready": True,
+                        "already": True,
+                        "pid": self.tracked_pid(),
+                        "message": "另一个进程已启动服务",
+                    }
+                return {"ok": False, "message": "另一个进程正在启动服务，稍后再试"}
+            try:
+                return self._start_locked(model_hint, wait)
+            finally:
+                self._release_start_lock(lock)
 
     def _start_locked(self, model_hint: str = "", wait: float = 25.0) -> dict:
         if not IS_WINDOWS:
