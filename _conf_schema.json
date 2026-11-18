@@ -23,16 +23,28 @@
     "default": 9000,
     "hint": "本地 Breeze 服务的端口：连接、一键启动、探测都用它，默认 9000，也可以换成别的空闲端口。"
   },
+  "service_warmup": {
+    "type": "bool",
+    "description": "启动时运行官方预热（不推荐）",
+    "hint": "预热会让启动多花约 10 多秒，但开启实测，语音质量也几乎无差别。默认关闭。",
+    "default": false
+  },
   "auto_start_service": {
     "description": "启用插件时自动拉起服务",
     "type": "bool",
     "default": true,
-    "hint": "默认开启：AstrBot 启动或改完设置保存时，如果探测不到服务，就用上面的目录和端口自动启动 breeze-server（后台窗口，不弹控制台）。没填目录则不动作；不想开机占显存就关掉。"
+    "hint": "默认开启,且自动休眠服务依赖于此选项开启"
+  },
+  "idle_stop_minutes": {
+    "type": "int",
+    "description": "自动休眠服务（分钟）",
+    "hint": "最低 1 分钟。在语音合成结束后，等待时间内没有新的语音合成，就会自动休眠本地服务释放显存。如果准备休眠时有新合成，会顺延，但最多只再顺延一个等待时间：例如设 5 分钟，最长 10 分钟就一定休眠一次，防止一直顺延导致服务一直开启。如果顺延时间到点还在合成，会等这次合成结束立刻休眠。休眠后新的语音请求会自动启动（约 2~3 秒）；若显存不足会先等 5 秒再决定是否放弃。",
+    "default": 5
   },
   "tts_probability": {
     "description": "触发概率（%）",
     "type": "int",
-    "default": 80,
+    "default": 50,
     "hint": "每条符合条件的回复按此概率转语音。0 = 永不触发，100 = 必定触发。"
   },
   "voice_id": {
@@ -40,6 +52,49 @@
     "type": "string",
     "default": "",
     "hint": "留空 = 自动使用服务端第一个音色；有多个时建议明确填写，例如 my-voice。"
+  },
+  "min_length": {
+    "description": "最短合成字数",
+    "type": "int",
+    "default": 5,
+    "hint": "短于这个长度的回复不合成语音（太短念出来很怪）。"
+  },
+  "split_synthesis": {
+    "type": "object",
+    "description": "长回复分段合成",
+    "hint": "回复太长时切开分别合成，首段更快出声；短回复不受影响",
+    "items": {
+      "split_enabled": {
+        "type": "bool",
+        "description": "启用分段合成",
+        "hint": "超过「分段阈值」时按句号切分、段间停顿；短回复仍整段合成。",
+        "default": true
+      },
+      "split_min_chars": {
+        "type": "int",
+        "description": "分段阈值（字数）",
+        "hint": "回复超过这个字数才分段。",
+        "default": 30
+      },
+      "split_max_chars": {
+        "type": "int",
+        "description": "每段最大字数",
+        "hint": "优先在句号切，单句过长才退到逗号。",
+        "default": 30
+      },
+      "split_gap_ms": {
+        "type": "int",
+        "description": "段间停顿（毫秒）",
+        "hint": "350 更自然。",
+        "default": 350
+      },
+      "split_parallel": {
+        "type": "bool",
+        "description": "启用并发优化（推荐开启）",
+        "hint": "启用分段合成后(未启动但开启也不会生效)，再合成多段语句时，速度会增快，且不影响语音合成效果。",
+        "default": true
+      }
+    }
   },
   "style_preset": {
     "description": "风格预设",
@@ -57,24 +112,6 @@
     "type": "text",
     "default": "",
     "hint": "优先级最高，填了就用它，忽略自动指令和预设。例：「语气温柔些，语速放慢，像在耳边说话」。"
-  },
-  "min_length": {
-    "description": "最短合成字数",
-    "type": "int",
-    "default": 5,
-    "hint": "短于这个长度的回复不合成语音（太短念出来很怪）。"
-  },
-  "max_length": {
-    "description": "最长合成字数",
-    "type": "int",
-    "default": 50,
-    "hint": "超过这个长度直接跳过语音（不截断，避免半句话）。群聊语音建议 50 以内。"
-  },
-  "blocked_words": {
-    "description": "屏蔽词列表",
-    "type": "list",
-    "default": [],
-    "hint": "回复里出现任一屏蔽词就跳过语音（文字照发）。例如不适合朗读的专有名词、链接。"
   },
   "speed_ratio": {
     "description": "语速（-50 ~ 100）",
@@ -94,6 +131,18 @@
     "default": 2.0,
     "hint": "只在有语气指令时生效。1.0 最快但忽略指令；2.0~3.0 让语气标记真正起作用；超过 3 可能发硬。"
   },
+  "enable_auto_instruction": {
+    "description": "自动生成语气指令",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后每次合成前会多调一次 LLM，分析这句话的情绪并生成配音指令。更贴合语境，但每条会多几秒。"
+  },
+  "llm_recognition": {
+    "description": "生成指令所用的模型",
+    "type": "string",
+    "default": "",
+    "hint": "留空 = 用当前会话的聊天模型。填 provider ID 可指定更便宜/更快的模型。"
+  },
   "seed": {
     "description": "随机种子",
     "type": "int",
@@ -105,18 +154,6 @@
     "type": "int",
     "default": 30,
     "hint": "单次合成的最长等待。"
-  },
-  "enable_auto_instruction": {
-    "description": "自动生成语气指令",
-    "type": "bool",
-    "default": true,
-    "hint": "开启后每次合成前会多调一次 LLM，分析这句话的情绪并生成配音指令。更贴合语境，但每条会多 1~2 秒。"
-  },
-  "llm_recognition": {
-    "description": "生成指令所用的模型",
-    "type": "string",
-    "default": "",
-    "hint": "留空 = 用当前会话的聊天模型。填 provider ID 可指定更便宜/更快的模型。"
   },
   "enable_tts_tool_minmax": {
     "description": "工具调用也校验长度",
@@ -130,10 +167,21 @@
     "default": false,
     "hint": "关闭（默认）= 群里只看到语音气泡；开启 = 文字和语音都发。"
   },
-  "fail_reply_text": {
-    "description": "合成失败时的提示",
-    "type": "string",
-    "default": "刚刚嗓子有点干,没说出话…等会再说",
-    "hint": "语音合成失败（服务没开、并发打满 409 等）时补发的一句提示；留空则只发原文字，不提示。"
+  "blocked_words": {
+    "description": "屏蔽词列表",
+    "type": "list",
+    "default": [],
+    "hint": "回复里出现任一屏蔽词就跳过语音（文字照发）。例如不适合朗读的不雅词汇。"
+  },
+  "fail_reply_texts": {
+    "description": "合成失败时的提示（可多条随机）",
+    "type": "list",
+    "default": [
+      "刚刚嗓子有点干,没说出话…等会再说",
+      "嗯…这声没出来，等我缓一下",
+      "哎呀，卡了一下，再说一遍好吗",
+      "声音没发出去，等下我再试试"
+    ],
+    "hint": "语音合成失败时随机补发一句；留空则只发原文字，不提示。"
   }
 }

@@ -403,3 +403,24 @@ def process(wav_bytes: bytes, speed_ratio: int = 0,
         return wav_bytes
 
 
+
+
+def concat_wavs(wav_bytes_list: list[bytes], gap_ms: int = 350) -> bytes | None:
+    """把多段标准 WAV 用固定静音拼起来；采样率以第一段为准。"""
+    if not wav_bytes_list:
+        return None
+    try:
+        _, sr = _parse_wav(wav_bytes_list[0])
+    except (ValueError, struct.error):
+        return None
+    gap = [0.0] * max(0, int(sr * gap_ms / 1000))
+    out: list[float] = []
+    for idx, raw in enumerate(wav_bytes_list):
+        try:
+            samples, _ = _parse_wav(raw)
+        except (ValueError, struct.error):
+            continue
+        out.extend(samples)
+        if idx < len(wav_bytes_list) - 1 and gap:
+            out.extend(gap)
+    return _build_wav(out, sr) if out else None

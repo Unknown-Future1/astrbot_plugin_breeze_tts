@@ -89,6 +89,8 @@ class BreezeTTSClient:
         cfg_scale: float | None = None,
         pitch_shift: int = 0,
         voice: str | None = None,
+        pad_ms: int = 80,
+        lead_ms: int = 250,
     ) -> bytes | None:
         """
         合成语音，返回处理后 WAV 的字节；失败返回 None（调用方负责降级）。
@@ -112,7 +114,7 @@ class BreezeTTSClient:
         # 关键一步：服务返回的是「流式 WAV」（长度字段 0xFFFFFFFF），
         # 直接发给客户端会让它把时长算成 4 GB、在结尾截断（「最后几个字没念」）。
         # 这里重封装成标准 WAV 并补 80ms 静音，保证尾巴完整。
-        fixed = audio_ops.normalize_wav(wav)
+        fixed = audio_ops.normalize_wav(wav, pad_ms=pad_ms, lead_ms=lead_ms)
         if fixed is not None:
             wav = fixed
 

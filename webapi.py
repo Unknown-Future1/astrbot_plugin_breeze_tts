@@ -130,14 +130,20 @@ def register_web_apis(plugin) -> None:
     # ------------------------------------------------------------- 启动/停止
     async def start():
         body = await request.get_json(silent=True) or {}
-        return jsonify(await _run(manager().start, str(body.get("model") or "")))
+        payload = await _run(manager().start, str(body.get("model") or ""))
+        if payload.get("ready"):
+            plugin.note_activity()
+        return jsonify(payload)
 
     async def stop():
         return jsonify(await _run(manager().stop))
 
     async def restart():
         body = await request.get_json(silent=True) or {}
-        return jsonify(await _run(manager().restart, str(body.get("model") or "")))
+        payload = await _run(manager().restart, str(body.get("model") or ""))
+        if payload.get("ready"):
+            plugin.note_activity()
+        return jsonify(payload)
 
     # ------------------------------------------------------------- 音色切换
     async def voice():

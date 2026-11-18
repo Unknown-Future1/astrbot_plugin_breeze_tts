@@ -364,7 +364,9 @@ class ServiceManager:
         parallel: int = DEFAULT_PARALLEL,
         webui: bool = True,
         data_dir: str = "",
+        warmup: bool = False,
     ):
+        self.warmup = bool(warmup)
         self.plugin_dir = Path(plugin_dir).resolve(strict=False)
         # 持久化数据放 data/plugin_data/<插件名>（AstrBot 规范）；没传就退回插件目录，便于单独跑脚本
         base = Path(data_dir).resolve(strict=False) if data_dir else self.plugin_dir
@@ -773,7 +775,9 @@ class ServiceManager:
     def _start_locked(self, model_hint: str = "", wait: float = 25.0) -> dict:
         if not IS_WINDOWS:
             return {"ok": False, "message": "只有 Windows 能管本地服务"}
-        if self.health()[0]:
+        # 端口没人监听就不用探活（离线时 health 要等超时）
+        owner = self.port_owner()
+        if owner is not None and self.health()[0]:
             return {
                 "ok": True,
                 "ready": True,
@@ -812,11 +816,17 @@ class ServiceManager:
             args += ["--voices-dir", str(voices_dir)]
         if self.webui:
             args.append("--webui")
+        if not self.warmup:
+            args.append("--no-warmup")
 
         # 同 exe + 同端口的残留（上次卡在加载没绑端口的僵尸）先清掉，
-        # 否则会再拉起一个，变成一堆抢显存的进程
-        cleaned = self._kill_stale(exe)
-        others = self._kill_others(exe)
+        # 否则会再拉起一个，变成一堆抢显存的进程；端口空且无记录时跳过这两次扫描
+        tracked = self.tracked_pid()
+        if owner is None and not tracked:
+            cleaned, others = [], []
+        else:
+            cleaned = self._kill_stale(exe)
+            others = self._kill_others(exe)
         notes = []
         if cleaned:
             notes.append(f"已清理同端口残留进程 {', '.join(map(str, cleaned))}")
@@ -905,9 +915,61 @@ class ServiceManager:
             "message": f"服务已就绪（{elapsed:.1f} 秒）{cleaned_note}",
         }
 
+    def _cleanup_after_stop(self) -> None:
+        self._proc = None
+        if self._log_fh is not None:
+            try:
+                self._log_fh.close()
+            except OSError:
+                pass
+            self._log_fh = None
+        self._clear_state()
+
+    def _fast_stop(self) -> dict | None:
+        """已知 PID 时直接杀（约 0.1~0.5 秒）；不确定时返回 None 走完整流程。"""
+        pids: list[int] = []
+        for value in (
+            self._proc.pid if self._proc is not None and self._proc.poll() is None else 0,
+            self._read_state().get("pid"),
+            self.port_owner(),
+        ):
+            try:
+                pid = int(value or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            if pid > 0 and pid not in pids:
+                pids.append(pid)
+
+        if not pids:
+            if not self.health(timeout=0.5)[0]:
+                self._cleanup_after_stop()
+                return {"ok": True, "pids": [], "message": "服务本来就没在跑"}
+            return None
+
+        killed: list[int] = []
+        for pid in pids:
+            if _pid_alive(pid) and _looks_like_breeze(pid) and _kill_pid(pid):
+                killed.append(pid)
+
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline and self.health(timeout=0.3)[0]:
+            time.sleep(0.1)
+        if self.health(timeout=0.5)[0]:
+            return None
+
+        self._cleanup_after_stop()
+        return {
+            "ok": True,
+            "pids": killed,
+            "message": f"已停止（快速停止：{', '.join(map(str, killed)) or '无'}），显存已释放",
+        }
+
     def stop(self, wait: float = 12.0) -> dict:
         if not IS_WINDOWS:
             return {"ok": False, "message": "只有 Windows 能管本地服务"}
+        fast = self._fast_stop()
+        if fast is not None:
+            return fast
         pids: list[int] = []
 
         def add(pid) -> None:
