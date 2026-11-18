@@ -1,7 +1,7 @@
-# 1.3.5 测试记录
+# 1.3.6 测试记录
 
 - 测试日期：2026-11-18
-- 插件版本：1.3.5
+- 插件版本：1.3.6
 - 环境：Windows 11 / RTX 3060 Laptop 12 GB / AstrBot 4.29.4
 - 模型：breeze-tts-2-q8_0.gguf（Breeze-TTS-2 v0.1.6，`--parallel 4 --no-warmup`）
 
