@@ -573,9 +573,7 @@ class BreezeTTSPlugin(Star):
             status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
             if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
                 return None
-            avail_phys = status.ullAvailPhys // (1024 * 1024)
-            avail_commit = status.ullAvailPageFile // (1024 * 1024)
-            return int(min(avail_phys, avail_commit))
+            return int(status.ullAvailPhys // (1024 * 1024))
         except Exception:  # noqa: BLE001
             return None
 
